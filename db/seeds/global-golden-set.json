@@ -1,0 +1,294 @@
+{
+  "name": "Global guldkorpus v1 (Lgr22 åk 9)",
+  "description": "Delad, avidentifierad startkorpus: 12 typfall av handskrivna elevsvar med lärarsatta poäng. Täcker fullpoäng, delpoäng, räknefel, teckenfel, enhetsfel, svar utan redovisning, gissa-och-pröva, blankt svar samt C/A-resonemang.",
+  "items": [
+    {
+      "questionSnapshot": {
+        "questionText": "Lös ekvationen 3x + 7 = 22.",
+        "number": "1",
+        "topic": "algebra",
+        "difficulty": "E",
+        "maxPoints": 2,
+        "correctAnswer": "x = 5",
+        "solutionSteps": "3x + 7 = 22 → 3x = 15 → x = 5",
+        "abilities": ["method", "communication"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "3x + 7 = 22\n3x = 22 - 7 = 15\nx = 15/3 = 5\nSvar: x = 5",
+        "latex": "3x+7=22 \\Rightarrow 3x=15 \\Rightarrow x=5",
+        "confidence": 0.97,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": false
+      },
+      "teacherPoints": 2,
+      "teacherComment": null
+    },
+    {
+      "questionSnapshot": {
+        "questionText": "Lös ekvationen 3x + 7 = 22.",
+        "number": "1",
+        "topic": "algebra",
+        "difficulty": "E",
+        "maxPoints": 2,
+        "correctAnswer": "x = 5",
+        "solutionSteps": "3x + 7 = 22 → 3x = 15 → x = 5",
+        "abilities": ["method", "communication"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "3x + 7 = 22\n3x = 22 + 7 = 29\nx = 29/3 ≈ 9,7",
+        "latex": "3x=29 \\Rightarrow x\\approx 9{,}7",
+        "confidence": 0.95,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": false
+      },
+      "teacherPoints": 1,
+      "teacherComment": "Korrekt metodansats men teckenfel vid flytt av 7:an — metodpoäng ges, ej svarspoäng."
+    },
+    {
+      "questionSnapshot": {
+        "questionText": "Lös ekvationen 3x + 7 = 22.",
+        "number": "1",
+        "topic": "algebra",
+        "difficulty": "E",
+        "maxPoints": 2,
+        "correctAnswer": "x = 5",
+        "solutionSteps": "3x + 7 = 22 → 3x = 15 → x = 5",
+        "abilities": ["method", "communication"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "x = 5",
+        "latex": "x=5",
+        "confidence": 0.99,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": false
+      },
+      "teacherPoints": 1,
+      "teacherComment": "Rätt svar utan redovisning — svarspoäng men ingen kommunikationspoäng."
+    },
+    {
+      "questionSnapshot": {
+        "questionText": "En rektangel har omkretsen 26 cm. Längden är 4 cm längre än bredden. Bestäm rektangelns area.",
+        "number": "2",
+        "topic": "geometri",
+        "difficulty": "C",
+        "maxPoints": 3,
+        "correctAnswer": "Arean är 38,25 cm² (bredd 4,5 cm, längd 8,5 cm)",
+        "solutionSteps": "2b + 2(b+4) = 26 → 4b + 8 = 26 → b = 4,5; l = 8,5; A = 4,5 · 8,5 = 38,25 cm²",
+        "abilities": ["concept", "method", "reasoning"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "b = bredden, l = b + 4\nO = 2b + 2l = 26\n2b + 2(b+4) = 26\n4b + 8 = 26\n4b = 18\nb = 4,5, l = 8,5\nA = 4,5 · 8,5 = 38,25 cm²",
+        "latex": "4b+8=26 \\Rightarrow b=4{,}5,\\ l=8{,}5,\\ A=38{,}25\\ \\text{cm}^2",
+        "confidence": 0.93,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": false
+      },
+      "teacherPoints": 3,
+      "teacherComment": "Fullständig och korrekt lösning med tydlig variabeldefinition."
+    },
+    {
+      "questionSnapshot": {
+        "questionText": "En rektangel har omkretsen 26 cm. Längden är 4 cm längre än bredden. Bestäm rektangelns area.",
+        "number": "2",
+        "topic": "geometri",
+        "difficulty": "C",
+        "maxPoints": 3,
+        "correctAnswer": "Arean är 38,25 cm² (bredd 4,5 cm, längd 8,5 cm)",
+        "solutionSteps": "2(2b+4)=26 → 4b+8=26 → b=4,5, l=8,5, A=38,25 cm²",
+        "abilities": ["concept", "method", "reasoning"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "b + b + 4 = 26\n2b = 22\nb = 11, l = 15\nA = 11 · 15 = 165 cm²",
+        "latex": "2b+4=26 \\Rightarrow b=11,\\ A=165",
+        "confidence": 0.94,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": false
+      },
+      "teacherPoints": 1,
+      "teacherComment": "Blandar ihop omkrets med halva omkretsen — begreppsfel. Areametoden i sista steget är dock korrekt utifrån elevens värden."
+    },
+    {
+      "questionSnapshot": {
+        "questionText": "Ett par skor kostar 800 kr. Priset sänks med 15 %, och senare höjs det nya priset med 15 %. Vad kostar skorna då? Motivera varför priset inte blir 800 kr.",
+        "number": "3",
+        "topic": "procent",
+        "difficulty": "C",
+        "maxPoints": 3,
+        "correctAnswer": "782 kr; höjningen räknas på ett lägre pris än sänkningen",
+        "solutionSteps": "800 · 0,85 = 680; 680 · 1,15 = 782. Procentsatserna verkar på olika baser.",
+        "abilities": ["method", "reasoning", "communication"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "800 · 0,85 = 680 kr\n680 · 1,15 = 782 kr\nDet blir inte 800 för att 15% av 680 är mindre än 15% av 800.",
+        "latex": "800\\cdot0{,}85=680,\\ 680\\cdot1{,}15=782",
+        "confidence": 0.96,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": false
+      },
+      "teacherPoints": 3,
+      "teacherComment": null
+    },
+    {
+      "questionSnapshot": {
+        "questionText": "Ett par skor kostar 800 kr. Priset sänks med 15 %, och senare höjs det nya priset med 15 %. Vad kostar skorna då? Motivera varför priset inte blir 800 kr.",
+        "number": "3",
+        "topic": "procent",
+        "difficulty": "C",
+        "maxPoints": 3,
+        "correctAnswer": "782 kr; höjningen räknas på ett lägre pris än sänkningen",
+        "solutionSteps": "800 · 0,85 = 680; 680 · 1,15 = 782. Procentsatserna verkar på olika baser.",
+        "abilities": ["method", "reasoning", "communication"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "800 - 15% = 680\n680 + 15% = 782 kr",
+        "latex": "680\\cdot1{,}15=782",
+        "confidence": 0.9,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": false
+      },
+      "teacherPoints": 2,
+      "teacherComment": "Korrekt beräkning men motiveringen saknas — resonemangspoängen uteblir."
+    },
+    {
+      "questionSnapshot": {
+        "questionText": "Sträckan mellan två städer är 24 mil. En bil kör sträckan på 3 timmar. Vilken är medelhastigheten i km/h?",
+        "number": "4",
+        "topic": "samband och förändring",
+        "difficulty": "E",
+        "maxPoints": 2,
+        "correctAnswer": "80 km/h",
+        "solutionSteps": "24 mil = 240 km; 240/3 = 80 km/h",
+        "abilities": ["concept", "method"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "v = s/t = 24/3 = 8 km/h",
+        "latex": "v=\\frac{24}{3}=8",
+        "confidence": 0.95,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": false
+      },
+      "teacherPoints": 1,
+      "teacherComment": "Rätt formel och division, men enhetsfel (mil → km saknas)."
+    },
+    {
+      "questionSnapshot": {
+        "questionText": "Ali kastar två sexsidiga tärningar. Hur stor är sannolikheten att summan blir 10? Svara i enklaste bråkform.",
+        "number": "5",
+        "topic": "sannolikhet",
+        "difficulty": "C",
+        "maxPoints": 2,
+        "correctAnswer": "3/36 = 1/12",
+        "solutionSteps": "Gynnsamma utfall: (4,6), (5,5), (6,4) → 3 av 36 → 1/12",
+        "abilities": ["concept", "method"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "4+6, 5+5, 6+4 → 3 sätt\n3/36 = 1/12",
+        "latex": "\\frac{3}{36}=\\frac{1}{12}",
+        "confidence": 0.92,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": false
+      },
+      "teacherPoints": 2,
+      "teacherComment": null
+    },
+    {
+      "questionSnapshot": {
+        "questionText": "Ali kastar två sexsidiga tärningar. Hur stor är sannolikheten att summan blir 10? Svara i enklaste bråkform.",
+        "number": "5",
+        "topic": "sannolikhet",
+        "difficulty": "C",
+        "maxPoints": 2,
+        "correctAnswer": "3/36 = 1/12",
+        "solutionSteps": "Gynnsamma utfall: (4,6), (5,5), (6,4) → 3 av 36 → 1/12",
+        "abilities": ["concept", "method"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "Summor: 2..12, alltså 11 möjliga.\nP(10) = 1/11",
+        "latex": "P(10)=\\frac{1}{11}",
+        "confidence": 0.9,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": false
+      },
+      "teacherPoints": 0,
+      "teacherComment": "Vanligt begreppsfel: antar att alla summor är lika sannolika."
+    },
+    {
+      "questionSnapshot": {
+        "questionText": "Visa att summan av tre på varandra följande heltal alltid är delbar med 3.",
+        "number": "6",
+        "topic": "algebra",
+        "difficulty": "A",
+        "maxPoints": 3,
+        "correctAnswer": "n + (n+1) + (n+2) = 3n + 3 = 3(n+1), delbart med 3",
+        "solutionSteps": "Låt talen vara n, n+1, n+2. Summan är 3n+3 = 3(n+1).",
+        "abilities": ["reasoning", "communication"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "1+2+3 = 6, 6/3 = 2 ✓\n4+5+6 = 15, 15/3 = 5 ✓\n7+8+9 = 24 ✓\nDet stämmer alltid.",
+        "latex": "1+2+3=6,\\ 4+5+6=15,\\ 7+8+9=24",
+        "confidence": 0.93,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": false
+      },
+      "teacherPoints": 1,
+      "teacherComment": "Prövar exempel men visar inte det allmänna fallet — ingen fullständig bevisföring på A-nivå."
+    },
+    {
+      "questionSnapshot": {
+        "questionText": "Visa att summan av tre på varandra följande heltal alltid är delbar med 3.",
+        "number": "6",
+        "topic": "algebra",
+        "difficulty": "A",
+        "maxPoints": 3,
+        "correctAnswer": "n + (n+1) + (n+2) = 3n + 3 = 3(n+1), delbart med 3",
+        "solutionSteps": "Låt talen vara n, n+1, n+2. Summan är 3n+3 = 3(n+1).",
+        "abilities": ["reasoning", "communication"],
+        "course": "Matematik åk 9",
+        "curriculum": "lgr22"
+      },
+      "transcription": {
+        "transcribedText": "",
+        "latex": "",
+        "confidence": 1,
+        "isLegible": true,
+        "uncertainSegments": [],
+        "isBlank": true
+      },
+      "teacherPoints": 0,
+      "teacherComment": null
+    }
+  ]
+}
