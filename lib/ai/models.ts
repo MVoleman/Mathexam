@@ -1,5 +1,5 @@
 import { google } from "@ai-sdk/google";
-import { anthropic } from "@ai-sdk/anthropic";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { embed } from "ai";
 
 /**
@@ -10,17 +10,26 @@ import { embed } from "ai";
  * - gemini-3.5-flash        — GA frontier Flash; top-tier OCR/vision, cheap & fast.
  * - gemini-3.1-pro-preview  — strongest Gemini reasoning; used where the model
  *                             must SOLVE math (question extraction).
- * - claude-sonnet-5         — Anthropic's daily-driver; primary grader.
+ * - claude-sonnet-5-5       — current Sonnet; primary grader. (No sampling
+ *                             params and no forced tool use: @ai-sdk/anthropic
+ *                             uses native structured output for it.)
  * - gemini-embedding-001    — replaces text-embedding-004 (deprecated 2026-01-14);
  *                             MRL-truncated to 768 dims to match the pgvector schema.
  */
 export const MODELS = {
   transcription: process.env.TRANSCRIPTION_MODEL ?? "gemini-3.5-flash",
   extraction: process.env.EXTRACTION_MODEL ?? "gemini-3.1-pro-preview",
-  grading: process.env.GRADING_MODEL ?? "claude-sonnet-5",
+  grading: process.env.GRADING_MODEL ?? "claude-sonnet-5-5",
   secondOpinion: process.env.SECOND_OPINION_MODEL ?? "gemini-3.5-flash",
   embedding: process.env.EMBEDDING_MODEL ?? "gemini-embedding-001",
 } as const;
+
+/**
+ * Explicit base URL: @ai-sdk/anthropic otherwise reads ANTHROPIC_BASE_URL and
+ * expects it to end in /v1, while Anthropic's own SDK and tooling set that
+ * variable WITHOUT /v1 — an inherited value would send every call to a 404.
+ */
+const anthropic = createAnthropic({ baseURL: "https://api.anthropic.com/v1" });
 
 export const transcriptionModel = () => google(MODELS.transcription);
 export const extractionModel = () => google(MODELS.extraction);
@@ -46,11 +55,11 @@ export async function embedText(
   taskType: "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT" = "RETRIEVAL_QUERY",
 ): Promise<number[]> {
   const { embedding } = await embed({
-    model: google.textEmbeddingModel(MODELS.embedding, {
-      outputDimensionality: EMBEDDING_DIMENSIONS,
-      taskType,
-    }),
+    model: google.textEmbeddingModel(MODELS.embedding),
     value,
+    providerOptions: {
+      google: { outputDimensionality: EMBEDDING_DIMENSIONS, taskType },
+    },
   });
   return embedding;
 }

@@ -3,7 +3,7 @@
 Next.js 14 (App Router) + Supabase (Auth, Postgres/pgvector, Storage) + Drizzle
 + Vercel AI SDK + Inngest. Grades handwritten math exams: one
 segmentation/transcription pass per submission (Gemini 3.5 Flash),
-RAG-grounded evaluation (Claude Sonnet 5), risk-based second opinions from an
+RAG-grounded evaluation (Claude Sonnet 5.5), risk-based second opinions from an
 independent model family, and a teacher-in-the-loop review workflow whose
 overrides feed a learning knowledge base. Multi-tenant (per-school RLS),
 multi-curriculum (Lgr22/Gy25/IB packs), with a golden-set eval harness and a
