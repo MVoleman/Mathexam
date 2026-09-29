@@ -4,7 +4,9 @@ export const MAX_PDF_PAGES = 40;
 
 /**
  * Rasterizes a PDF buffer to one PNG buffer per page via `pdf-to-img`
- * (pure-JS pdfjs — no native binaries). Requires Node 20+ and
+ * (pdfjs + the native `canvas` package, whose prebuilt binary is fetched by
+ * its install script — allowed via `allowScripts` in package.json, which
+ * npm 12+ requires). Requires Node 20+ and
  * `serverComponentsExternalPackages: ["pdf-to-img"]` in next.config
  * (ESM-only package, hence the dynamic import).
  */

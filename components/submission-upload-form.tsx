@@ -33,7 +33,10 @@ export function SubmissionUploadForm({
 
   function addFiles(list: FileList | null) {
     if (!list) return;
-    setFiles((prev) => [...prev, ...Array.from(list)]);
+    // Copy now: `list` is the input's live FileList, and clearing the input
+    // below empties it before React runs the state updater.
+    const added = Array.from(list);
+    setFiles((prev) => [...prev, ...added]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
