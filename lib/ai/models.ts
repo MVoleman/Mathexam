@@ -46,11 +46,11 @@ export async function embedText(
   taskType: "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT" = "RETRIEVAL_QUERY",
 ): Promise<number[]> {
   const { embedding } = await embed({
-    model: google.textEmbeddingModel(MODELS.embedding),
+    model: google.textEmbeddingModel(MODELS.embedding, {
+      outputDimensionality: EMBEDDING_DIMENSIONS,
+      taskType,
+    }),
     value,
-    providerOptions: {
-      google: { outputDimensionality: EMBEDDING_DIMENSIONS, taskType },
-    },
   });
   return embedding;
 }

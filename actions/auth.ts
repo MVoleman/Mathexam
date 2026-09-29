@@ -168,7 +168,7 @@ const OnboardingSchema = z.object({
   schoolName: z.string().trim().min(1, "Skolans namn krävs."),
 });
 
-export async function completeOnboarding(formData: FormData): Promise<AuthResult> {
+export async function completeOnboarding(formData: FormData): Promise<void> {
   const supabase = createServerSupabase();
   const {
     data: { user },
@@ -179,7 +179,9 @@ export async function completeOnboarding(formData: FormData): Promise<AuthResult
     fullName: formData.get("fullName"),
     schoolName: formData.get("schoolName"),
   });
-  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+  // Used directly as a <form action>, so there is no caller to return an
+  // error to; the inputs are `required`, so this only trips on tampering.
+  if (!parsed.success) throw new Error(parsed.error.issues[0].message);
 
   const existing = await db.query.profiles.findFirst({
     where: eq(profiles.id, user.id),

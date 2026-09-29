@@ -17,16 +17,14 @@ export async function pdfToPngBuffers(
   const dataUrl = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
   const document = await pdf(dataUrl, { scale });
 
+  if (document.length > maxPages) {
+    throw new Error(`PDF:en har ${document.length} sidor — max ${maxPages} sidor stöds.`);
+  }
+
+  // pdf-to-img exposes no destroy(); the pdfjs document is freed by GC.
   const pageBuffers: Buffer[] = [];
-  try {
-    if (document.length > maxPages) {
-      throw new Error(`PDF:en har ${document.length} sidor — max ${maxPages} sidor stöds.`);
-    }
-    for await (const image of document) {
-      pageBuffers.push(Buffer.from(image));
-    }
-  } finally {
-    await document.destroy();
+  for await (const image of document) {
+    pageBuffers.push(Buffer.from(image));
   }
 
   return pageBuffers;
