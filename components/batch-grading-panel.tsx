@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Loader2, Play, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Play, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -96,12 +96,17 @@ export function BatchGradingPanel({
             <Progress value={progressPct} />
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
-                {processed}/{job.totalItems} klara
+                {job.completedItems}/{job.totalItems} rättade
                 {job.failedItems > 0 && ` (${job.failedItems} misslyckade)`}
               </span>
-              {job.status === "completed" && (
+              {job.status === "completed" && job.failedItems === 0 && (
                 <span className="flex items-center gap-1 text-emerald-600">
                   <CheckCircle2 className="h-4 w-4" /> Klar
+                </span>
+              )}
+              {job.status === "completed" && job.failedItems > 0 && (
+                <span className="flex items-center gap-1 text-amber-600">
+                  <AlertTriangle className="h-4 w-4" /> Klar med fel
                 </span>
               )}
               {job.status === "failed" && (

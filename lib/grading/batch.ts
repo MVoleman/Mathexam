@@ -87,15 +87,33 @@ export async function gradeSubmissionForJob(
 }
 
 export async function finalizeGradingJob(jobId: string, examId: string): Promise<void> {
+  const job = await db.query.gradingJobs.findFirst({
+    where: eq(gradingJobs.id, jobId),
+    columns: { completedItems: true, failedItems: true },
+  });
+  // Nothing graded (e.g. a provider outage) is a failed job, not a finished
+  // one. Partial failures stay "completed"; they live in failedItems/lastError.
+  const nothingGraded = !!job && job.completedItems === 0 && job.failedItems > 0;
+
   await db
     .update(gradingJobs)
-    .set({
-      status: "completed", // per-item failures live in failedItems/lastError
-      finishedAt: new Date(),
-    })
+    .set({ status: nothingGraded ? "failed" : "completed", finishedAt: new Date() })
     .where(eq(gradingJobs.id, jobId));
 
-  await db.update(exams).set({ status: "graded" }).where(eq(exams.id, examId));
+  // Don't mark the exam graded off a failed run; keep "graded" only if an
+  // earlier run already produced results.
+  let examStatus: "graded" | "ready" = "graded";
+  if (nothingGraded) {
+    const [{ hasResults }] = await db.execute<{ hasResults: boolean }>(sql`
+      SELECT EXISTS (
+        SELECT 1 FROM grading_results gr
+        JOIN student_submissions ss ON ss.id = gr.submission_id
+        WHERE ss.exam_id = ${examId}
+      ) AS "hasResults"
+    `);
+    examStatus = hasResults ? "graded" : "ready";
+  }
+  await db.update(exams).set({ status: examStatus }).where(eq(exams.id, examId));
 }
 
 export async function failGradingJob(jobId: string, error: unknown): Promise<void> {
