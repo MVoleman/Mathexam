@@ -60,17 +60,20 @@ export async function getDashboardStats(schoolId: string) {
 // Exams
 // ---------------------------------------------------------------------------
 
+// Correlated subqueries below spell out "table"."column" by hand: Drizzle
+// renders ${table.col} unqualified inside sql``, so an outer ${exams.id}
+// would silently bind to the inner table's own "id" and count nothing.
 export async function getExamsList(schoolId: string) {
   return db
     .select({
       exam: exams,
       submissionCount: sql<number>`(
         SELECT count(*)::int FROM ${studentSubmissions}
-        WHERE ${studentSubmissions.examId} = ${exams.id}
+        WHERE "student_submissions"."exam_id" = "exams"."id"
       )`,
       questionCount: sql<number>`(
         SELECT count(*)::int FROM ${questions}
-        WHERE ${questions.examId} = ${exams.id}
+        WHERE "questions"."exam_id" = "exams"."id"
       )`,
     })
     .from(exams)
@@ -96,16 +99,16 @@ export async function getExamDetail(examId: string, schoolId: string) {
         imageCount: sql<number>`coalesce(array_length(${studentSubmissions.imageUrls}, 1), 0)`,
         gradedCount: sql<number>`(
           SELECT count(*)::int FROM ${gradingResults}
-          WHERE ${gradingResults.submissionId} = ${studentSubmissions.id}
+          WHERE "grading_results"."submission_id" = "student_submissions"."id"
         )`,
         needsReviewCount: sql<number>`(
           SELECT count(*)::int FROM ${gradingResults}
-          WHERE ${gradingResults.submissionId} = ${studentSubmissions.id}
+          WHERE "grading_results"."submission_id" = "student_submissions"."id"
             AND ${gradingResults.needsHumanReview} = true
         )`,
         totalPoints: sql<number>`coalesce((
           SELECT sum(${gradingResults.awardedPoints}) FROM ${gradingResults}
-          WHERE ${gradingResults.submissionId} = ${studentSubmissions.id}
+          WHERE "grading_results"."submission_id" = "student_submissions"."id"
         ), 0)`,
       })
       .from(studentSubmissions)
@@ -261,7 +264,7 @@ export async function getEvalOverview(schoolId: string) {
       set: goldenSets,
       itemCount: sql<number>`(
         SELECT count(*)::int FROM ${goldenItems}
-        WHERE ${goldenItems.setId} = ${goldenSets.id}
+        WHERE "golden_items"."set_id" = "golden_sets"."id"
       )`,
     })
     .from(goldenSets)

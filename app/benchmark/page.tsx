@@ -26,7 +26,7 @@ export default async function BenchmarkPage() {
       set: goldenSets,
       itemCount: sql<number>`(
         SELECT count(*)::int FROM ${goldenItems}
-        WHERE ${goldenItems.setId} = ${goldenSets.id}
+        WHERE "golden_items"."set_id" = "golden_sets"."id"
       )`,
     })
     .from(goldenSets)
