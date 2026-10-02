@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, FlaskConical, Loader2, Pencil } from "lucide-react";
+import { AlertTriangle, Check, FlaskConical, Loader2, Pencil, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,6 +64,11 @@ function ResultCard({
   const [isEditing, setIsEditing] = useState(false);
   const [points, setPoints] = useState(String(result.awardedPoints));
   const [comment, setComment] = useState(result.teacherComment ?? "");
+  const initialAbilities = result.evaluation.lgr22Assessment.map(({ ability, demonstrated }) => ({
+    ability,
+    demonstrated,
+  }));
+  const [abilities, setAbilities] = useState(initialAbilities);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -86,10 +91,13 @@ function ResultCard({
       return;
     }
     startTransition(async () => {
+      const abilitiesChanged =
+        JSON.stringify(abilities) !== JSON.stringify(initialAbilities);
       const res = await overrideResult({
         resultId: result.id,
         awardedPoints: parsed,
         teacherComment: comment || undefined,
+        abilities: abilitiesChanged ? abilities : undefined,
       });
       if (!res.success) setError(res.error);
       else {
@@ -202,6 +210,11 @@ function ResultCard({
                 className="max-w-28"
               />
             </div>
+            <AbilityEditor
+              abilities={abilities}
+              onChange={setAbilities}
+              abilityLabels={abilityLabels}
+            />
             <div className="space-y-2">
               <Label htmlFor={`comment-${result.id}`}>Kommentar (valfri)</Label>
               <Textarea
@@ -217,7 +230,10 @@ function ResultCard({
                 Spara korrigering
               </Button>
               <Button
-                onClick={() => setIsEditing(false)}
+                onClick={() => {
+                  setIsEditing(false);
+                  setAbilities(initialAbilities);
+                }}
                 variant="ghost"
                 size="sm"
                 disabled={isPending}
@@ -259,6 +275,89 @@ function ResultCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Per-ability verdict in the correction form: click toggles shown/not shown,
+ * × drops an ability that doesn't apply, and abilities the AI missed can be
+ * added from the curriculum. Ability stats weight each verdict by points.
+ */
+function AbilityEditor({
+  abilities,
+  onChange,
+  abilityLabels,
+}: {
+  abilities: { ability: string; demonstrated: boolean }[];
+  onChange: (next: { ability: string; demonstrated: boolean }[]) => void;
+  abilityLabels: Record<string, string>;
+}) {
+  const addable = Object.keys(abilityLabels).filter(
+    (code) => !abilities.some((a) => a.ability === code),
+  );
+
+  return (
+    <div className="space-y-2">
+      <Label>Förmågor</Label>
+      <div className="flex flex-wrap items-center gap-2">
+        {abilities.map((a) => (
+          <span
+            key={a.ability}
+            className={`inline-flex items-center rounded-full border text-xs ${
+              a.demonstrated
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-destructive/50 text-destructive"
+            }`}
+          >
+            <button
+              type="button"
+              className="py-1 pl-2.5 pr-1"
+              title={a.demonstrated ? "Visad — klicka för ej visad" : "Ej visad — klicka för visad"}
+              onClick={() =>
+                onChange(
+                  abilities.map((x) =>
+                    x.ability === a.ability ? { ...x, demonstrated: !x.demonstrated } : x,
+                  ),
+                )
+              }
+            >
+              {a.demonstrated ? "✓" : "✗"} {abilityLabels[a.ability] ?? a.ability}
+            </button>
+            <button
+              type="button"
+              className="py-1 pl-0.5 pr-2 opacity-70 hover:opacity-100"
+              aria-label={`Ta bort ${abilityLabels[a.ability] ?? a.ability}`}
+              onClick={() => onChange(abilities.filter((x) => x.ability !== a.ability))}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        {addable.length > 0 && (
+          <select
+            value=""
+            onChange={(e) => {
+              if (e.target.value) {
+                onChange([...abilities, { ability: e.target.value, demonstrated: false }]);
+              }
+            }}
+            className="h-7 rounded-full border bg-background px-2 text-xs text-muted-foreground"
+            aria-label="Lägg till förmåga"
+          >
+            <option value="">+ Lägg till förmåga</option>
+            {addable.map((code) => (
+              <option key={code} value={code}>
+                {abilityLabels[code]}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Klicka för att växla visad/ej visad. En förmåga som inte visats räknas som 0 poäng i
+        förmågeprofilen för den här uppgiften.
+      </p>
+    </div>
   );
 }
 

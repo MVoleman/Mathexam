@@ -154,7 +154,7 @@ export type TopicStat = {
   avgPct: number;
   answers: number;
 };
-export type AbilityStat = { ability: Lgr22Ability; demonstratedRate: number };
+export type AbilityStat = { ability: Lgr22Ability; pointsRate: number };
 export type PitfallStat = { pitfall: string; occurrences: number };
 export type StudentTotal = { studentId: string; submissionId: string; total: number };
 
@@ -177,11 +177,18 @@ export async function getExamAnalytics(examId: string, schoolId: string) {
     .groupBy(questions.topic, questions.difficulty)
     .orderBy(asc(questions.topic));
 
+  // Ability rate = share of the points available on the questions that test
+  // it, so partial credit and teacher overrides show up. An ability the
+  // teacher marked as not shown contributes 0 for that answer.
   const abilityRows = await db.execute(sql`
     SELECT a.value->>'ability' AS ability,
-           round(avg(CASE WHEN (a.value->>'demonstrated')::boolean THEN 1.0 ELSE 0.0 END) * 100)::int AS rate
+           round(
+             sum(CASE WHEN (a.value->>'demonstrated')::boolean THEN gr.awarded_points ELSE 0 END)
+             / nullif(sum(q.max_points), 0) * 100
+           )::int AS rate
     FROM ${gradingResults} gr
     JOIN ${studentSubmissions} ss ON ss.id = gr.submission_id
+    JOIN ${questions} q ON q.id = gr.question_id
     CROSS JOIN LATERAL jsonb_array_elements(gr.evaluation->'lgr22Assessment') AS a(value)
     WHERE ss.exam_id = ${examId}
     GROUP BY a.value->>'ability'
@@ -215,7 +222,7 @@ export async function getExamAnalytics(examId: string, schoolId: string) {
     exam,
     topicStats: topicStats as TopicStat[],
     abilityStats: (abilityRows as unknown as { ability: Lgr22Ability; rate: number }[]).map(
-      (r) => ({ ability: r.ability, demonstratedRate: Number(r.rate) }),
+      (r) => ({ ability: r.ability, pointsRate: Number(r.rate) }),
     ) as AbilityStat[],
     pitfalls: (pitfallRows as unknown as PitfallStat[]).map((r) => ({
       pitfall: r.pitfall,
@@ -319,13 +326,14 @@ export async function getStudentReport(
   const totalPoints = submission.results.reduce((s, r) => s + r.awardedPoints, 0);
   const maxPoints = submission.results.reduce((s, r) => s + r.question.maxPoints, 0);
 
-  // Ability summary across all answers.
-  const abilityMap = new Map<Lgr22Ability, { demonstrated: number; assessed: number }>();
+  // Ability summary: share of points on the questions testing each ability
+  // (same definition as the exam analytics).
+  const abilityMap = new Map<Lgr22Ability, { earned: number; available: number }>();
   for (const result of submission.results) {
     for (const a of result.evaluation.lgr22Assessment) {
-      const entry = abilityMap.get(a.ability) ?? { demonstrated: 0, assessed: 0 };
-      entry.assessed += 1;
-      if (a.demonstrated) entry.demonstrated += 1;
+      const entry = abilityMap.get(a.ability) ?? { earned: 0, available: 0 };
+      entry.available += result.question.maxPoints;
+      if (a.demonstrated) entry.earned += result.awardedPoints;
       abilityMap.set(a.ability, entry);
     }
   }
@@ -348,7 +356,7 @@ export async function getStudentReport(
     grade,
     abilities: [...abilityMap.entries()].map(([ability, v]) => ({
       ability,
-      rate: v.assessed === 0 ? 0 : Math.round((v.demonstrated / v.assessed) * 100),
+      rate: v.available === 0 ? 0 : Math.round((v.earned / v.available) * 100),
     })),
   };
 }

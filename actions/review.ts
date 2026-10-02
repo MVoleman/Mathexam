@@ -4,7 +4,9 @@ import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
-import { gradingResults, questions } from "@/db/schema";
+import { exams, gradingResults, questions } from "@/db/schema";
+import { getPack } from "@/lib/curriculum/packs";
+import type { AbilityAssessment } from "@/lib/validations/ai-schemas";
 import { capturePrecedentFromOverride } from "@/lib/rag/learn";
 import { assertResultInSchool, requireTeacher, TenancyError } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -57,6 +59,13 @@ const OverrideInputSchema = z.object({
   resultId: z.string().uuid(),
   awardedPoints: z.number().min(0),
   teacherComment: z.string().max(2000).optional(),
+  /**
+   * The teacher's verdict per ability. Replaces the AI's list; abilities the
+   * AI assessed but that are missing here are dropped.
+   */
+  abilities: z
+    .array(z.object({ ability: z.string(), demonstrated: z.boolean() }))
+    .optional(),
 });
 export type OverrideInput = z.infer<typeof OverrideInputSchema>;
 
@@ -92,10 +101,37 @@ export async function overrideResult(rawInput: OverrideInput): Promise<ReviewAct
     };
   }
 
+  let evaluation = result.evaluation;
+  if (input.abilities) {
+    const exam = await db.query.exams.findFirst({
+      where: eq(exams.id, question.examId),
+      columns: { curriculum: true },
+    });
+    const validCodes = new Set(getPack(exam?.curriculum ?? "lgr22").abilities.map((a) => a.code));
+    const invalid = input.abilities.find((a) => !validCodes.has(a.ability));
+    if (invalid) return { success: false, error: `Okänd förmåga: ${invalid.ability}` };
+
+    const previous = new Map(evaluation.lgr22Assessment.map((a) => [a.ability, a]));
+    const assessment: AbilityAssessment[] = input.abilities.map(({ ability, demonstrated }) => {
+      const prev = previous.get(ability);
+      return {
+        ability,
+        demonstrated,
+        // Keep the AI's level when the verdict still holds; otherwise fall
+        // back to the question's level (shown) or none (not shown).
+        level: demonstrated ? (prev?.demonstrated && prev.level) || question.difficulty : null,
+        evidence:
+          prev && prev.demonstrated === demonstrated ? prev.evidence : "Bedömt av lärare vid granskning.",
+      };
+    });
+    evaluation = { ...evaluation, lgr22Assessment: assessment };
+  }
+
   await db
     .update(gradingResults)
     .set({
       awardedPoints: input.awardedPoints,
+      evaluation,
       teacherComment: input.teacherComment ?? null,
       status: "overridden",
       needsHumanReview: false,
@@ -122,7 +158,13 @@ export async function overrideResult(rawInput: OverrideInput): Promise<ReviewAct
     action: "result.override",
     entityType: "result",
     entityId: input.resultId,
-    metadata: { awardedPoints: input.awardedPoints },
+    metadata: {
+      awardedPoints: input.awardedPoints,
+      // e.g. "method:+,concept:-"; omitted when abilities were left untouched.
+      ...(input.abilities && {
+        abilities: input.abilities.map((a) => `${a.ability}:${a.demonstrated ? "+" : "-"}`).join(","),
+      }),
+    },
   });
 
   revalidatePath(`/review/${result.submissionId}`);

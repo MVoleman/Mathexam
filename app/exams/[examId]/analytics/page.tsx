@@ -70,7 +70,7 @@ export default async function AnalyticsPage({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Förmågor (Lgr22) — andel visad</CardTitle>
+            <CardTitle className="text-base">Förmågor (Lgr22) — andel av poängen</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {abilityStats.length === 0 && (
@@ -80,9 +80,9 @@ export default async function AnalyticsPage({
               <div key={a.ability} className="space-y-1">
                 <div className="flex justify-between text-sm">
                   <span>{abilityLabels[a.ability] ?? a.ability}</span>
-                  <span className="text-muted-foreground">{a.demonstratedRate}%</span>
+                  <span className="text-muted-foreground">{a.pointsRate}%</span>
                 </div>
-                <Progress value={a.demonstratedRate} />
+                <Progress value={a.pointsRate} />
               </div>
             ))}
           </CardContent>
