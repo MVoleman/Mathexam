@@ -16,6 +16,7 @@ import type {
   TranscriptionResult,
   EvaluationResult,
 } from "@/lib/validations/ai-schemas";
+import type { QuestionFields } from "@/lib/validations/question-schema";
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -144,6 +145,9 @@ export type GradingLimits = {
   A: number;
 };
 
+/** An AI-extracted question awaiting review; `id` is stable across edits. */
+export type QuestionDraft = QuestionFields & { id: string };
+
 // ---------------------------------------------------------------------------
 // exams
 // ---------------------------------------------------------------------------
@@ -169,6 +173,12 @@ export const exams = pgTable("exams", {
    */
   pageImageUrls: text("page_image_urls").array().notNull().default([]),
   gradingLimits: jsonb("grading_limits").$type<GradingLimits>(),
+  /**
+   * AI-extracted questions awaiting teacher review. Persisted so a reload or
+   * navigation never forces a second (paid) extraction; each draft leaves
+   * this list when it is saved as a question or discarded.
+   */
+  questionDrafts: jsonb("question_drafts").$type<QuestionDraft[]>().notNull().default([]),
   status: examStatusEnum("status").notNull().default("draft"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

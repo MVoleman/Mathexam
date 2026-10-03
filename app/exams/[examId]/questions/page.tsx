@@ -46,6 +46,7 @@ export default async function QuestionsPage({
         examId={exam.id}
         hasPageImages={exam.pageImageUrls.length > 0}
         questions={examQuestions}
+        initialDrafts={exam.questionDrafts}
         curriculum={exam.curriculum}
       />
     </div>
