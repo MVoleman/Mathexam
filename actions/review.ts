@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { exams, gradingResults, questions } from "@/db/schema";
 import { getPack } from "@/lib/curriculum/packs";
+import { rubricOf, scoreRubric } from "@/lib/rubric";
 import type { AbilityAssessment } from "@/lib/validations/ai-schemas";
 import { capturePrecedentFromOverride } from "@/lib/rag/learn";
 import { assertResultInSchool, requireTeacher, TenancyError } from "@/lib/auth";
@@ -66,6 +67,11 @@ const OverrideInputSchema = z.object({
   abilities: z
     .array(z.object({ ability: z.string(), demonstrated: z.boolean() }))
     .optional(),
+  /**
+   * The teacher's verdict per moment. When given, the points are computed
+   * from the moments and `awardedPoints` is ignored.
+   */
+  rubric: z.array(z.object({ itemId: z.string(), met: z.boolean() })).optional(),
 });
 export type OverrideInput = z.infer<typeof OverrideInputSchema>;
 
@@ -102,7 +108,33 @@ export async function overrideResult(rawInput: OverrideInput): Promise<ReviewAct
   }
 
   let evaluation = result.evaluation;
-  if (input.abilities) {
+  let awardedPoints = input.awardedPoints;
+  if (input.rubric) {
+    const rubric = rubricOf(question);
+    const known = new Set(rubric.map((i) => i.id));
+    const unknown = input.rubric.find((v) => !known.has(v.itemId));
+    if (unknown) return { success: false, error: `Okänt moment: ${unknown.itemId}` };
+
+    const previous = new Map((evaluation.rubricAssessment ?? []).map((v) => [v.itemId, v]));
+    const scored = scoreRubric(
+      rubric,
+      input.rubric.map(({ itemId, met }) => {
+        const prev = previous.get(itemId);
+        return {
+          itemId,
+          met,
+          evidence: prev && prev.met === met ? prev.evidence : "Bedömt av lärare vid granskning.",
+        };
+      }),
+    );
+    awardedPoints = scored.points;
+    evaluation = {
+      ...evaluation,
+      rubricAssessment: scored.verdicts,
+      lgr22Assessment: scored.abilityAssessment,
+      awardedPoints,
+    };
+  } else if (input.abilities) {
     const exam = await db.query.exams.findFirst({
       where: eq(exams.id, question.examId),
       columns: { curriculum: true },
@@ -130,7 +162,7 @@ export async function overrideResult(rawInput: OverrideInput): Promise<ReviewAct
   await db
     .update(gradingResults)
     .set({
-      awardedPoints: input.awardedPoints,
+      awardedPoints,
       evaluation,
       teacherComment: input.teacherComment ?? null,
       status: "overridden",
@@ -145,7 +177,7 @@ export async function overrideResult(rawInput: OverrideInput): Promise<ReviewAct
   try {
     await capturePrecedentFromOverride({
       resultId: input.resultId,
-      awardedPoints: input.awardedPoints,
+      awardedPoints,
       teacherComment: input.teacherComment,
     });
   } catch (err) {
@@ -159,10 +191,14 @@ export async function overrideResult(rawInput: OverrideInput): Promise<ReviewAct
     entityType: "result",
     entityId: input.resultId,
     metadata: {
-      awardedPoints: input.awardedPoints,
+      awardedPoints,
       // e.g. "method:+,concept:-"; omitted when abilities were left untouched.
       ...(input.abilities && {
         abilities: input.abilities.map((a) => `${a.ability}:${a.demonstrated ? "+" : "-"}`).join(","),
+      }),
+      // e.g. "m1:+,m2:-"; omitted when moments were left untouched.
+      ...(input.rubric && {
+        moments: input.rubric.map((v) => `${v.itemId}:${v.met ? "+" : "-"}`).join(","),
       }),
     },
   });

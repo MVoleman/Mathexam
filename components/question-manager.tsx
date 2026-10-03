@@ -19,23 +19,39 @@ import {
 } from "@/actions/questions";
 import type { QuestionFields } from "@/lib/validations/question-schema";
 import type { Question, QuestionDraft } from "@/db/schema";
-import type { Lgr22Ability, GradeLevel } from "@/lib/validations/ai-schemas";
 import { getPack } from "@/lib/curriculum/packs";
+import {
+  LEVELS,
+  formatLevelPoints,
+  rubricOf,
+  summarizeRubric,
+  type RubricItem,
+} from "@/lib/rubric";
 
 type AbilityOption = { value: string; label: string };
 
-const DIFFICULTIES: GradeLevel[] = ["E", "C", "A"];
+/** Next free moment id ("m1", "m2", …) for a new row. */
+function nextMomentId(rubric: RubricItem[]): string {
+  const used = rubric.map((i) => Number(/^m(\d+)$/.exec(i.id)?.[1] ?? 0));
+  return `m${Math.max(0, ...used) + 1}`;
+}
 
 function emptyFields(abilities: AbilityOption[]): QuestionFields {
   return {
     number: "",
     questionText: "",
     topic: "",
-    difficulty: "E",
-    maxPoints: 1,
     correctAnswer: "",
     solutionSteps: "",
-    lgr22Abilities: abilities.length > 0 ? [abilities[0].value] : [],
+    rubric: [
+      {
+        id: "m1",
+        description: "",
+        level: "E",
+        ability: abilities[0]?.value ?? "method",
+        points: 1,
+      },
+    ],
   };
 }
 
@@ -274,11 +290,9 @@ function ExistingQuestionCard({
               number: question.number,
               questionText: question.questionText,
               topic: question.topic,
-              difficulty: question.difficulty,
-              maxPoints: question.maxPoints,
               correctAnswer: question.correctAnswer,
               solutionSteps: question.solutionSteps ?? "",
-              lgr22Abilities: question.lgr22Abilities,
+              rubric: rubricOf(question),
             }}
             submitLabel="Spara ändringar"
             onSubmit={async (fields) => {
@@ -305,14 +319,25 @@ function ExistingQuestionCard({
             {question.number}. <span className="font-normal">{question.questionText}</span>
           </p>
           <p className="text-xs text-muted-foreground">
-            Facit: {question.correctAnswer} · {question.topic} ·{" "}
-            {question.lgr22Abilities
-              .map((a) => abilityOptions.find((x) => x.value === a)?.label ?? a)
-              .join(", ")}
+            Facit: {question.correctAnswer} · {question.topic}
           </p>
+          <ul className="space-y-0.5 pt-1 text-xs">
+            {rubricOf(question).map((item) => (
+              <li key={item.id} className="flex gap-2">
+                <span className="w-5 shrink-0 font-semibold">{item.level}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  {abilityOptions.find((x) => x.value === item.ability)?.label ?? item.ability}{" "}
+                  · {item.points}p
+                </span>
+                <span className="min-w-0">{item.description}</span>
+              </li>
+            ))}
+          </ul>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <Badge variant="outline">{question.difficulty}</Badge>
+          <Badge variant="outline" title="Poäng på E/C/A-nivå">
+            {formatLevelPoints(summarizeRubric(rubricOf(question)).levelPoints)}
+          </Badge>
           <Badge variant="secondary">{question.maxPoints}p</Badge>
           <Button onClick={() => setIsEditing(true)} variant="ghost" size="icon">
             <Pencil className="h-4 w-4" />
@@ -370,14 +395,37 @@ function QuestionForm({
     setFields((prev) => ({ ...prev, [key]: value }));
   }
 
-  function toggleAbility(ability: Lgr22Ability) {
+  function updateMoment(id: string, patch: Partial<RubricItem>) {
     setFields((prev) => ({
       ...prev,
-      lgr22Abilities: prev.lgr22Abilities.includes(ability)
-        ? prev.lgr22Abilities.filter((a) => a !== ability)
-        : [...prev.lgr22Abilities, ability],
+      rubric: prev.rubric.map((i) => (i.id === id ? { ...i, ...patch } : i)),
     }));
   }
+
+  function addMoment() {
+    setFields((prev) => {
+      const last = prev.rubric[prev.rubric.length - 1];
+      return {
+        ...prev,
+        rubric: [
+          ...prev.rubric,
+          {
+            id: nextMomentId(prev.rubric),
+            description: "",
+            level: last?.level ?? "E",
+            ability: last?.ability ?? abilityOptions[0]?.value ?? "method",
+            points: 1,
+          },
+        ],
+      };
+    });
+  }
+
+  function removeMoment(id: string) {
+    setFields((prev) => ({ ...prev, rubric: prev.rubric.filter((i) => i.id !== id) }));
+  }
+
+  const summary = summarizeRubric(fields.rubric);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -391,7 +439,7 @@ function QuestionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-[6rem_1fr_6rem]">
+      <div className="grid gap-4 sm:grid-cols-[6rem_1fr]">
         <div className="space-y-2">
           <Label>Nummer</Label>
           <Input
@@ -408,14 +456,6 @@ function QuestionForm({
             placeholder="algebra"
           />
         </div>
-        <div className="space-y-2">
-          <Label>Maxpoäng</Label>
-          <Input
-            value={String(fields.maxPoints)}
-            onChange={(e) => set("maxPoints", Number(e.target.value) || 0)}
-            inputMode="numeric"
-          />
-        </div>
       </div>
 
       <div className="space-y-2">
@@ -427,32 +467,13 @@ function QuestionForm({
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Facit</Label>
-          <Input
-            value={fields.correctAnswer}
-            onChange={(e) => set("correctAnswer", e.target.value)}
-            placeholder="x = 5"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Nivå</Label>
-          <div className="flex gap-1">
-            {DIFFICULTIES.map((d) => (
-              <Button
-                key={d}
-                type="button"
-                variant={fields.difficulty === d ? "default" : "outline"}
-                size="sm"
-                className="flex-1"
-                onClick={() => set("difficulty", d)}
-              >
-                {d}
-              </Button>
-            ))}
-          </div>
-        </div>
+      <div className="space-y-2">
+        <Label>Facit</Label>
+        <Input
+          value={fields.correctAnswer}
+          onChange={(e) => set("correctAnswer", e.target.value)}
+          placeholder="x = 5"
+        />
       </div>
 
       <div className="space-y-2">
@@ -466,20 +487,79 @@ function QuestionForm({
       </div>
 
       <div className="space-y-2">
-        <Label>Förmågor / kriterier</Label>
-        <div className="flex flex-wrap gap-1">
-          {abilityOptions.map(({ value, label }) => (
-            <Button
-              key={value}
-              type="button"
-              variant={fields.lgr22Abilities.includes(value) ? "default" : "outline"}
-              size="sm"
-              onClick={() => toggleAbility(value)}
-            >
-              {label}
-            </Button>
+        <div className="flex items-baseline justify-between gap-2">
+          <Label>Bedömningsanvisning</Label>
+          <span className="text-xs text-muted-foreground">
+            E/C/A: <span className="font-medium text-foreground">{formatLevelPoints(summary.levelPoints)}</span>{" "}
+            · max {summary.maxPoints}p
+          </span>
+        </div>
+        <div className="space-y-2">
+          {fields.rubric.map((item) => (
+            <div key={item.id} className="space-y-2 rounded-md border p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex gap-1">
+                  {LEVELS.map((level) => (
+                    <Button
+                      key={level}
+                      type="button"
+                      size="sm"
+                      variant={item.level === level ? "default" : "outline"}
+                      className="h-8 w-8 p-0"
+                      onClick={() => updateMoment(item.id, { level })}
+                      aria-label={`${level}-nivå`}
+                    >
+                      {level}
+                    </Button>
+                  ))}
+                </div>
+                <select
+                  value={item.ability}
+                  onChange={(e) => updateMoment(item.id, { ability: e.target.value })}
+                  className="h-8 rounded-md border bg-background px-2 text-sm"
+                  aria-label="Förmåga"
+                >
+                  {abilityOptions.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex items-center gap-1">
+                  <Input
+                    value={String(item.points)}
+                    onChange={(e) => updateMoment(item.id, { points: Number(e.target.value) || 0 })}
+                    inputMode="numeric"
+                    className="h-8 w-14"
+                    aria-label="Poäng"
+                  />
+                  <span className="text-sm text-muted-foreground">p</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="ml-auto h-8 w-8"
+                  onClick={() => removeMoment(item.id)}
+                  disabled={fields.rubric.length === 1}
+                  aria-label="Ta bort moment"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <Textarea
+                value={item.description}
+                onChange={(e) => updateMoment(item.id, { description: e.target.value })}
+                rows={2}
+                placeholder="T.ex. Godtagbar ansats: tecknar ekvationen x + (x+1) + (x+2) = 72"
+              />
+            </div>
           ))}
         </div>
+        <Button type="button" variant="outline" size="sm" onClick={addMoment}>
+          <Plus className="mr-2 h-4 w-4" />
+          Lägg till moment
+        </Button>
       </div>
 
       {error && (

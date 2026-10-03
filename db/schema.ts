@@ -17,6 +17,7 @@ import type {
   EvaluationResult,
 } from "@/lib/validations/ai-schemas";
 import type { QuestionFields } from "@/lib/validations/question-schema";
+import type { RubricItem } from "@/lib/rubric";
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -143,6 +144,10 @@ export type GradingLimits = {
   E: number;
   C: number;
   A: number;
+  /** C (and A) also require at least this many points on C or A level. */
+  cLevelMin?: number;
+  /** A also requires at least this many points on A level. */
+  aLevelMin?: number;
 };
 
 /** An AI-extracted question awaiting review; `id` is stable across edits. */
@@ -207,6 +212,11 @@ export const questions = pgTable(
      * Column name kept from the Lgr22-only era for migration compatibility.
      */
     lgr22Abilities: text("lgr22_abilities").array().notNull(),
+    /**
+     * Bedömningsanvisning as moments (lib/rubric.ts). difficulty, maxPoints
+     * and lgr22Abilities above are derived from it on every save.
+     */
+    rubric: jsonb("rubric").$type<RubricItem[]>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("questions_exam_id_idx").on(table.examId)],
@@ -448,6 +458,8 @@ export type GoldenQuestionSnapshot = {
   correctAnswer: string;
   solutionSteps: string | null;
   abilities: string[];
+  /** Moments at capture time (absent on items captured before moments). */
+  rubric?: RubricItem[];
   course: string;
   curriculum: string;
 };

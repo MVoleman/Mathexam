@@ -7,6 +7,7 @@ import { QuestionManager } from "@/components/question-manager";
 import { db } from "@/db";
 import { exams, questions } from "@/db/schema";
 import { requireTeacher } from "@/lib/auth";
+import { normalizeDraft } from "@/lib/validations/question-schema";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export default async function QuestionsPage({
         examId={exam.id}
         hasPageImages={exam.pageImageUrls.length > 0}
         questions={examQuestions}
-        initialDrafts={exam.questionDrafts}
+        initialDrafts={exam.questionDrafts.map(normalizeDraft)}
         curriculum={exam.curriculum}
       />
     </div>

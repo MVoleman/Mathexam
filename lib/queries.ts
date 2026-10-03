@@ -12,6 +12,14 @@ import {
   type Exam,
 } from "@/db/schema";
 import type { Lgr22Ability } from "@/lib/validations/ai-schemas";
+import {
+  abilityTotals,
+  addLevelPoints,
+  answerLevelPoints,
+  emptyLevelPoints,
+  gradeFor,
+  type LevelPoints,
+} from "@/lib/rubric";
 
 // ---------------------------------------------------------------------------
 // Dashboard
@@ -177,23 +185,32 @@ export async function getExamAnalytics(examId: string, schoolId: string) {
     .groupBy(questions.topic, questions.difficulty)
     .orderBy(asc(questions.topic));
 
-  // Ability rate = share of the points available on the questions that test
-  // it, so partial credit and teacher overrides show up. An ability the
-  // teacher marked as not shown contributes 0 for that answer.
-  const abilityRows = await db.execute(sql`
-    SELECT a.value->>'ability' AS ability,
-           round(
-             sum(CASE WHEN (a.value->>'demonstrated')::boolean THEN gr.awarded_points ELSE 0 END)
-             / nullif(sum(q.max_points), 0) * 100
-           )::int AS rate
-    FROM ${gradingResults} gr
-    JOIN ${studentSubmissions} ss ON ss.id = gr.submission_id
-    JOIN ${questions} q ON q.id = gr.question_id
-    CROSS JOIN LATERAL jsonb_array_elements(gr.evaluation->'lgr22Assessment') AS a(value)
-    WHERE ss.exam_id = ${examId}
-    GROUP BY a.value->>'ability'
-    ORDER BY rate ASC
-  `);
+  // Abilities and grades are computed per moment (lib/rubric.ts), so every
+  // answer is loaded with its question's moments.
+  const answers = await db
+    .select({
+      submissionId: gradingResults.submissionId,
+      awardedPoints: gradingResults.awardedPoints,
+      evaluation: gradingResults.evaluation,
+      question: questions,
+    })
+    .from(gradingResults)
+    .innerJoin(questions, eq(gradingResults.questionId, questions.id))
+    .where(eq(questions.examId, examId));
+
+  // Ability rate = share of the points available on the moments that test it.
+  const abilityRows = [...abilityTotals(answers).entries()]
+    .map(([ability, t]) => ({
+      ability,
+      rate: t.available === 0 ? 0 : Math.round((t.earned / t.available) * 100),
+    }))
+    .sort((a, b) => a.rate - b.rate);
+
+  const levelPointsBySubmission = new Map<string, LevelPoints>();
+  for (const a of answers) {
+    const prev = levelPointsBySubmission.get(a.submissionId) ?? emptyLevelPoints();
+    levelPointsBySubmission.set(a.submissionId, addLevelPoints(prev, answerLevelPoints(a)));
+  }
 
   const pitfallRows = await db.execute(sql`
     SELECT p.value AS pitfall, count(*)::int AS occurrences
@@ -221,9 +238,9 @@ export async function getExamAnalytics(examId: string, schoolId: string) {
   return {
     exam,
     topicStats: topicStats as TopicStat[],
-    abilityStats: (abilityRows as unknown as { ability: Lgr22Ability; rate: number }[]).map(
-      (r) => ({ ability: r.ability, pointsRate: Number(r.rate) }),
-    ) as AbilityStat[],
+    abilityStats: abilityRows.map(
+      (r): AbilityStat => ({ ability: r.ability, pointsRate: r.rate }),
+    ),
     pitfalls: (pitfallRows as unknown as PitfallStat[]).map((r) => ({
       pitfall: r.pitfall,
       occurrences: Number(r.occurrences),
@@ -233,7 +250,10 @@ export async function getExamAnalytics(examId: string, schoolId: string) {
       total: Number(r.total),
     })),
     gradeDistribution: computeGradeDistribution(
-      studentTotals.map((r) => Number(r.total)),
+      studentTotals.map((r) => ({
+        total: Number(r.total),
+        levelPoints: levelPointsBySubmission.get(r.submissionId) ?? emptyLevelPoints(),
+      })),
       exam.gradingLimits,
     ),
   };
@@ -242,19 +262,12 @@ export async function getExamAnalytics(examId: string, schoolId: string) {
 export type GradeBucket = { grade: "F" | "E" | "C" | "A"; students: number };
 
 function computeGradeDistribution(
-  totals: number[],
+  students: { total: number; levelPoints: LevelPoints }[],
   limits: Exam["gradingLimits"],
 ): GradeBucket[] {
   const buckets: Record<GradeBucket["grade"], number> = { F: 0, E: 0, C: 0, A: 0 };
-  for (const total of totals) {
-    if (!limits) {
-      buckets.F += 1;
-      continue;
-    }
-    if (total >= limits.A) buckets.A += 1;
-    else if (total >= limits.C) buckets.C += 1;
-    else if (total >= limits.E) buckets.E += 1;
-    else buckets.F += 1;
+  for (const { total, levelPoints } of students) {
+    buckets[limits ? gradeFor(total, levelPoints, limits) : "F"] += 1;
   }
   return (Object.entries(buckets) as [GradeBucket["grade"], number][]).map(
     ([grade, students]) => ({ grade, students }),
@@ -326,33 +339,20 @@ export async function getStudentReport(
   const totalPoints = submission.results.reduce((s, r) => s + r.awardedPoints, 0);
   const maxPoints = submission.results.reduce((s, r) => s + r.question.maxPoints, 0);
 
-  // Ability summary: share of points on the questions testing each ability
-  // (same definition as the exam analytics).
-  const abilityMap = new Map<Lgr22Ability, { earned: number; available: number }>();
-  for (const result of submission.results) {
-    for (const a of result.evaluation.lgr22Assessment) {
-      const entry = abilityMap.get(a.ability) ?? { earned: 0, available: 0 };
-      entry.available += result.question.maxPoints;
-      if (a.demonstrated) entry.earned += result.awardedPoints;
-      abilityMap.set(a.ability, entry);
-    }
-  }
-
+  // Ability summary and grade, per moment (same definitions as the analytics).
+  const abilityMap = abilityTotals(submission.results);
+  const levelPoints = submission.results.reduce(
+    (sum, r) => addLevelPoints(sum, answerLevelPoints(r)),
+    emptyLevelPoints(),
+  );
   const limits = submission.exam.gradingLimits;
-  const grade = !limits
-    ? null
-    : totalPoints >= limits.A
-      ? "A"
-      : totalPoints >= limits.C
-        ? "C"
-        : totalPoints >= limits.E
-          ? "E"
-          : "F";
+  const grade = limits ? gradeFor(totalPoints, levelPoints, limits) : null;
 
   return {
     submission,
     totalPoints,
     maxPoints,
+    levelPoints,
     grade,
     abilities: [...abilityMap.entries()].map(([ability, v]) => ({
       ability,

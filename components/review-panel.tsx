@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { approveResult, overrideResult } from "@/actions/review";
 import { addResultToGoldenSet } from "@/actions/evals";
 import { getAbilityLabels } from "@/lib/curriculum/packs";
+import { formatLevelPoints, rubricOf, scoreRubric, summarizeRubric } from "@/lib/rubric";
 import type { GradingResult, Question } from "@/db/schema";
 
 type ResultWithQuestion = GradingResult & { question: Question };
@@ -69,6 +70,10 @@ function ResultCard({
     demonstrated,
   }));
   const [abilities, setAbilities] = useState(initialAbilities);
+  // Moment-graded answers are corrected per moment; older ones by points.
+  const rubric = rubricOf(result.question);
+  const initialMoments = result.evaluation.rubricAssessment?.map(({ itemId, met }) => ({ itemId, met }));
+  const [moments, setMoments] = useState(initialMoments);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -83,6 +88,13 @@ function ResultCard({
     });
   }
 
+  const momentPoints = moments
+    ? scoreRubric(
+        rubric,
+        moments.map((m) => ({ ...m, evidence: "" })),
+      ).points
+    : 0;
+
   function handleOverride() {
     setError(null);
     const parsed = Number(points.replace(",", "."));
@@ -95,9 +107,11 @@ function ResultCard({
         JSON.stringify(abilities) !== JSON.stringify(initialAbilities);
       const res = await overrideResult({
         resultId: result.id,
-        awardedPoints: parsed,
+        awardedPoints: moments ? momentPoints : parsed,
         teacherComment: comment || undefined,
-        abilities: abilitiesChanged ? abilities : undefined,
+        ...(moments
+          ? { rubric: moments }
+          : { abilities: abilitiesChanged ? abilities : undefined }),
       });
       if (!res.success) setError(res.error);
       else {
@@ -114,7 +128,8 @@ function ResultCard({
           <CardTitle className="text-base">
             Uppgift {question.number}{" "}
             <span className="font-normal text-muted-foreground">
-              ({question.difficulty}-nivå, max {question.maxPoints}p)
+              (E/C/A {formatLevelPoints(summarizeRubric(rubric).levelPoints)}, max{" "}
+              {question.maxPoints}p)
             </span>
           </CardTitle>
           <div className="flex shrink-0 items-center gap-2">
@@ -163,7 +178,37 @@ function ResultCard({
           <p className="text-sm">{evaluation.reasoning}</p>
         </section>
 
-        {evaluation.lgr22Assessment.length > 0 && (
+        {evaluation.rubricAssessment && !isEditing && (
+          <section>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Bedömningsanvisning
+            </h3>
+            <ul className="space-y-1.5">
+              {rubric.map((item) => {
+                const verdict = evaluation.rubricAssessment?.find((v) => v.itemId === item.id);
+                return (
+                  <li key={item.id} className="flex gap-2 text-sm">
+                    <span className={verdict?.met ? "text-emerald-600" : "text-destructive"}>
+                      {verdict?.met ? "✓" : "✗"}
+                    </span>
+                    <span className="w-5 shrink-0 font-semibold">{item.level}</span>
+                    <span className="min-w-0">
+                      {item.description}{" "}
+                      <span className="text-muted-foreground">
+                        ({abilityLabels[item.ability] ?? item.ability}, {item.points}p)
+                      </span>
+                      {verdict?.evidence && (
+                        <span className="block text-xs text-muted-foreground">{verdict.evidence}</span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        {!evaluation.rubricAssessment && evaluation.lgr22Assessment.length > 0 && (
           <section className="flex flex-wrap gap-2">
             {evaluation.lgr22Assessment.map((a) => (
               <Badge
@@ -198,23 +243,63 @@ function ResultCard({
 
         {isEditing ? (
           <div className="space-y-3 rounded-md border p-4">
-            <div className="space-y-2">
-              <Label htmlFor={`points-${result.id}`}>
-                Poäng (0–{question.maxPoints})
-              </Label>
-              <Input
-                id={`points-${result.id}`}
-                value={points}
-                onChange={(e) => setPoints(e.target.value)}
-                inputMode="decimal"
-                className="max-w-28"
-              />
-            </div>
-            <AbilityEditor
-              abilities={abilities}
-              onChange={setAbilities}
-              abilityLabels={abilityLabels}
-            />
+            {moments ? (
+              <div className="space-y-2">
+                <Label>Uppfyllda moment</Label>
+                <ul className="space-y-1.5">
+                  {rubric.map((item) => {
+                    const met = moments.find((m) => m.itemId === item.id)?.met ?? false;
+                    return (
+                      <li key={item.id}>
+                        <label className="flex cursor-pointer gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={met}
+                            onChange={(e) =>
+                              setMoments((prev) => [
+                                ...(prev ?? []).filter((m) => m.itemId !== item.id),
+                                { itemId: item.id, met: e.target.checked },
+                              ])
+                            }
+                            className="mt-0.5"
+                          />
+                          <span className="w-5 shrink-0 font-semibold">{item.level}</span>
+                          <span>
+                            {item.description}{" "}
+                            <span className="text-muted-foreground">
+                              ({abilityLabels[item.ability] ?? item.ability}, {item.points}p)
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="text-sm">
+                  Poäng: <span className="font-semibold">{momentPoints}</span>/{question.maxPoints}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor={`points-${result.id}`}>
+                    Poäng (0–{question.maxPoints})
+                  </Label>
+                  <Input
+                    id={`points-${result.id}`}
+                    value={points}
+                    onChange={(e) => setPoints(e.target.value)}
+                    inputMode="decimal"
+                    className="max-w-28"
+                  />
+                </div>
+                <AbilityEditor
+                  abilities={abilities}
+                  onChange={setAbilities}
+                  abilityLabels={abilityLabels}
+                />
+              </>
+            )}
             <div className="space-y-2">
               <Label htmlFor={`comment-${result.id}`}>Kommentar (valfri)</Label>
               <Textarea
@@ -233,6 +318,7 @@ function ResultCard({
                 onClick={() => {
                   setIsEditing(false);
                   setAbilities(initialAbilities);
+                  setMoments(initialMoments);
                 }}
                 variant="ghost"
                 size="sm"

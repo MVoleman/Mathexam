@@ -5,6 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BatchGradingPanel } from "@/components/batch-grading-panel";
+import { GradingLimitsForm } from "@/components/grading-limits-form";
+import {
+  addLevelPoints,
+  emptyLevelPoints,
+  formatLevelPoints,
+  rubricOf,
+  summarizeRubric,
+} from "@/lib/rubric";
 import { getExamDetail } from "@/lib/queries";
 import { requireTeacher } from "@/lib/auth";
 import { EXAMS_BUCKET, resolveStorageUrl } from "@/lib/storage";
@@ -22,6 +30,12 @@ export default async function ExamDetailPage({
 
   const { exam, questions, submissions, latestJob } = detail;
   const maxTotal = questions.reduce((s, q) => s + q.maxPoints, 0);
+  const levelPointsOf = (q: (typeof questions)[number]) =>
+    summarizeRubric(rubricOf(q)).levelPoints;
+  const examLevelPoints = questions.reduce(
+    (sum, q) => addLevelPoints(sum, levelPointsOf(q)),
+    emptyLevelPoints(),
+  );
   const pdfUrl = exam.pdfUrl
     ? await resolveStorageUrl(EXAMS_BUCKET, exam.pdfUrl)
     : null;
@@ -66,6 +80,12 @@ export default async function ExamDetailPage({
         questionCount={questions.length}
       />
 
+      <GradingLimitsForm
+        examId={exam.id}
+        limits={exam.gradingLimits}
+        examLevelPoints={examLevelPoints}
+      />
+
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -88,7 +108,9 @@ export default async function ExamDetailPage({
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-1">
-                  <Badge variant="outline">{q.difficulty}</Badge>
+                  <Badge variant="outline" title="Poäng på E/C/A-nivå">
+                    {formatLevelPoints(levelPointsOf(q))}
+                  </Badge>
                   <Badge variant="secondary">{q.maxPoints}p</Badge>
                 </div>
               </div>

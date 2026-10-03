@@ -20,13 +20,21 @@ import {
   findRelevantSolutionReferences,
   type SolutionReferenceMatch,
 } from "@/lib/rag/vector-search";
-import { abilityPromptBlock, getPack } from "@/lib/curriculum/packs";
+import { abilityPromptBlock, getAbilityLabels, getPack } from "@/lib/curriculum/packs";
+import {
+  formatLevelPoints,
+  rubricOf,
+  rubricPromptLines,
+  scoreRubric,
+  summarizeRubric,
+} from "@/lib/rubric";
 import { SUBMISSIONS_BUCKET, resolveStorageUrls } from "@/lib/storage";
 import { mapWithConcurrency } from "@/lib/utils/concurrency";
 import {
   TranscriptionResultSchema,
   SubmissionTranscriptionSchema,
-  EvaluationResultSchema,
+  ModelEvaluationSchema,
+  type ModelEvaluation,
   type TranscriptionResult,
   type AnswerTranscription,
   type EvaluationResult,
@@ -196,18 +204,21 @@ function buildEvaluationPrompt(
     system: [
       pack.graderPersona,
       "Bedöm ENDAST utifrån elevens redovisade arbete. Var konsekvent med delpoängsreglerna.",
+      "Poäng ges per moment i bedömningsanvisningen: avgör för VARJE moment om elevens lösning uppfyller det (met) och citera belägg. Ett högre moment som bygger på ett lägre (\"med i övrigt godtagbar lösning …\") kräver normalt att det lägre också är uppfyllt. Räkna inte ihop poäng själv.",
       "Lärarbedömda prejudikat visar hur läraren själv poängsatt liknande svar — följ dem.",
       `Formativ återkoppling ska vara konstruktiv, konkret och riktad till eleven på ${feedbackLanguage}.`,
       "",
-      `Kursplanens förmågor/kriterier (${pack.label}) — använd exakt dessa koder i lgr22Assessment:`,
+      `Kursplanens förmågor/kriterier (${pack.label}):`,
       abilityPromptBlock(pack),
     ].join("\n"),
     prompt: [
-      `## Uppgift ${question.number} (${question.difficulty}-nivå, max ${question.maxPoints}p)`,
+      `## Uppgift ${question.number} (${formatLevelPoints(summarizeRubric(rubricOf(question)).levelPoints)} E/C/A-poäng)`,
       question.questionText,
       `Facit: ${question.correctAnswer}`,
       question.solutionSteps ? `Lösningssteg: ${question.solutionSteps}` : "",
-      `Bedömda förmågor/kriterier: ${question.lgr22Abilities.join(", ")}`,
+      "",
+      "## Bedömningsanvisning (ge exakt ett omdöme per moment-id)",
+      rubricPromptLines(rubricOf(question), getAbilityLabels(context.curriculum)),
       "",
       "## Referensmaterial (kunskapsbas)",
       referenceBlock,
@@ -224,6 +235,22 @@ function buildEvaluationPrompt(
   };
 }
 
+/**
+ * Turns the model's per-moment verdicts into a stored EvaluationResult:
+ * points, max and the ability summary come from the moments, not the model.
+ */
+function toEvaluationResult(model: ModelEvaluation, context: RagContext): EvaluationResult {
+  const rubric = rubricOf(context.question);
+  const scored = scoreRubric(rubric, model.rubricAssessment);
+  return {
+    ...model,
+    rubricAssessment: scored.verdicts,
+    awardedPoints: scored.points,
+    maxPoints: summarizeRubric(rubric).maxPoints,
+    lgr22Assessment: scored.abilityAssessment,
+  };
+}
+
 export async function evaluateAnswer(
   transcription: TranscriptionResult,
   context: RagContext,
@@ -231,11 +258,11 @@ export async function evaluateAnswer(
   const { system, prompt } = buildEvaluationPrompt(transcription, context);
   const { object } = await generateObject({
     model: gradingModel(),
-    schema: EvaluationResultSchema,
+    schema: ModelEvaluationSchema,
     system,
     prompt,
   });
-  return object;
+  return toEvaluationResult(object, context);
 }
 
 async function secondOpinion(
@@ -245,11 +272,11 @@ async function secondOpinion(
   const { system, prompt } = buildEvaluationPrompt(transcription, context);
   const { object } = await generateObject({
     model: secondOpinionModel(),
-    schema: EvaluationResultSchema,
+    schema: ModelEvaluationSchema,
     system,
     prompt,
   });
-  return object;
+  return toEvaluationResult(object, context);
 }
 
 function needsSecondOpinion(evaluation: EvaluationResult, maxPoints: number): boolean {
@@ -269,9 +296,10 @@ function disagreementThreshold(maxPoints: number): number {
 // Grade one answer (shared by single re-grade and batch)
 // ---------------------------------------------------------------------------
 
-const blankEvaluation = (maxPoints: number): EvaluationResult => ({
+const blankEvaluation = (question: Question): EvaluationResult => ({
   awardedPoints: 0,
-  maxPoints,
+  maxPoints: question.maxPoints,
+  rubricAssessment: rubricOf(question).map((i) => ({ itemId: i.id, met: false, evidence: "" })),
   lgr22Assessment: [],
   reasoning: "Svaret är blankt — inga poäng kan ges.",
   formativeFeedback:
@@ -291,7 +319,7 @@ export async function gradeAnswer(input: {
   const { transcription } = input;
 
   let evaluation = transcription.isBlank
-    ? blankEvaluation(maxPoints)
+    ? blankEvaluation(context.question)
     : await evaluateAnswer(transcription, context);
 
   // Independent cross-check where the risk sits.

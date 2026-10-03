@@ -87,6 +87,42 @@ export const AbilityAssessmentSchema = z.object({
 });
 export type AbilityAssessment = z.infer<typeof AbilityAssessmentSchema>;
 
+/** The grader's verdict on one moment of the bedömningsanvisning. */
+export const RubricVerdictSchema = z.object({
+  itemId: z.string().describe('The moment id, exactly as given in the prompt, e.g. "m1".'),
+  met: z.boolean().describe("True if the student's work fulfils this moment."),
+  evidence: z
+    .string()
+    .describe("Short quote or observation from the student's work supporting the verdict."),
+});
+export type RubricVerdict = z.infer<typeof RubricVerdictSchema>;
+
+/**
+ * What the grading model returns: a verdict per moment plus the prose. The
+ * points, max and ability summary are computed from the moments server-side
+ * (lib/rubric.ts) and stored as an EvaluationResult.
+ */
+export const ModelEvaluationSchema = z.object({
+  rubricAssessment: z
+    .array(RubricVerdictSchema)
+    .describe("Exactly one verdict per moment listed in the bedömningsanvisning, in order."),
+  /** Step-by-step grading rationale (teacher-facing). */
+  reasoning: z
+    .string()
+    .describe("Teacher-facing explanation of the verdicts, referencing the moments."),
+  formativeFeedback: z
+    .string()
+    .describe("Constructive, encouraging feedback addressed to the student."),
+  identifiedPitfalls: z
+    .array(z.string())
+    .describe("Common pitfalls from the reference material observed in this answer. Empty if none."),
+  confidence: z.number().min(0).max(1),
+  needsHumanReview: z
+    .boolean()
+    .describe("True if a teacher should verify this grading manually."),
+});
+export type ModelEvaluation = z.infer<typeof ModelEvaluationSchema>;
+
 export const EvaluationResultSchema = z.object({
   /** Points awarded, respecting the question's max points and partial-credit rules. */
   awardedPoints: z
@@ -94,6 +130,8 @@ export const EvaluationResultSchema = z.object({
     .min(0)
     .describe("Points awarded. Must not exceed the question's max points."),
   maxPoints: z.number().int().positive().describe("The question's maximum points, echoed back."),
+  /** Verdict per moment (absent on answers graded before moments existed). */
+  rubricAssessment: z.array(RubricVerdictSchema).optional(),
   /** Per-ability Lgr22 assessment. */
   lgr22Assessment: z
     .array(AbilityAssessmentSchema)
@@ -123,25 +161,30 @@ export type EvaluationResult = z.infer<typeof EvaluationResultSchema>;
 // Question extraction from exam pages (Gemini 1.5 Pro, generateObject)
 // ---------------------------------------------------------------------------
 
+export const ExtractedRubricItemSchema = z.object({
+  description: z
+    .string()
+    .describe(
+      "What the student must show for this point, in the style of Skolverket's bedömningsanvisningar, e.g. \"Godtagbar ansats, t.ex. tecknar ekvationen x + (x+1) + (x+2) = 72\" or \"Med i övrigt godtagbar lösning med korrekt svar (23, 24, 25)\".",
+    ),
+  level: GradeLevelSchema.describe("The level this point is awarded at: E, C or A."),
+  ability: Lgr22AbilitySchema.describe("The ability CODE this point assesses (from the list in the prompt)."),
+  points: z.number().int().min(1).describe("Points for this moment, usually 1."),
+});
+
 export const ExtractedQuestionSchema = z.object({
   number: z.string().describe('Question number as printed, e.g. "1", "2a".'),
   questionText: z.string().describe("The full question text, verbatim."),
   topic: z
     .string()
     .describe('Math topic in Swedish, lowercase, e.g. "algebra", "geometri", "statistik".'),
-  difficulty: GradeLevelSchema.describe("Assessed difficulty level per Lgr22: E, C or A."),
-  maxPoints: z
-    .number()
-    .int()
-    .min(1)
-    .describe("Maximum points as printed on the exam, or a reasonable estimate."),
   correctAnswer: z.string().describe("The correct final answer."),
   solutionSteps: z.string().describe("A concise correct solution, step by step."),
-  lgr22Abilities: z
-    .array(Lgr22AbilitySchema)
+  rubric: z
+    .array(ExtractedRubricItemSchema)
     .min(1)
     .describe(
-      "Which curriculum abilities the question primarily assesses — use the ability CODES listed in the prompt.",
+      'The bedömningsanvisning as moments. Points per level must match the printed E/C/A points, e.g. "(1/1/0)" → one E moment and one C moment. Order moments from E to A.',
     ),
 });
 export type ExtractedQuestion = z.infer<typeof ExtractedQuestionSchema>;

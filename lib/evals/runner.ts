@@ -80,6 +80,7 @@ export async function captureGoldenItem(input: {
     correctAnswer: question.correctAnswer,
     solutionSteps: question.solutionSteps,
     abilities: question.lgr22Abilities,
+    rubric: question.rubric,
     course: exam.course,
     curriculum: exam.curriculum,
   };
@@ -118,6 +119,8 @@ function contextFromSnapshot(
     correctAnswer: snapshot.correctAnswer,
     solutionSteps: snapshot.solutionSteps,
     lgr22Abilities: snapshot.abilities as Question["lgr22Abilities"],
+    // Older snapshots have no moments; rubricOf() derives them from the rest.
+    rubric: snapshot.rubric ?? [],
     createdAt: new Date(),
   } satisfies Question;
 

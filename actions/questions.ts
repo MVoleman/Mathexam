@@ -11,6 +11,8 @@ import { exams, questions, type Question, type QuestionDraft } from "@/db/schema
 import { ExamExtractionSchema } from "@/lib/validations/ai-schemas";
 import {
   QuestionFieldsSchema,
+  normalizeDraft,
+  questionColumns,
   type QuestionFields,
 } from "@/lib/validations/question-schema";
 import { requireTeacher } from "@/lib/auth";
@@ -53,11 +55,7 @@ export async function createQuestion(
 
   const [question] = await db
     .insert(questions)
-    .values({
-      examId: examIdParsed.data,
-      ...fields.data,
-      solutionSteps: fields.data.solutionSteps || null,
-    })
+    .values({ examId: examIdParsed.data, ...questionColumns(fields.data) })
     .returning();
 
   revalidatePath(`/exams/${examId}`);
@@ -81,7 +79,7 @@ export async function updateQuestion(
 
   const [question] = await db
     .update(questions)
-    .set({ ...fields.data, solutionSteps: fields.data.solutionSteps || null })
+    .set(questionColumns(fields.data))
     .where(eq(questions.id, idParsed.data))
     .returning();
 
@@ -156,10 +154,14 @@ export async function extractQuestionsFromExam(
                 "Extract EVERY question, in order. For each question:",
                 "- Copy the question text verbatim (translate nothing).",
                 '- Use the printed sub-numbering ("1", "2a", "2b" ...).',
-                "- Read the printed max points if shown (e.g. \"(2/1/0)\" formats — sum them), otherwise estimate.",
-                "- Assess difficulty (E/C/A) and which curriculum abilities/criteria it tests, using EXACTLY these codes:",
-                abilityPromptBlock(getPack(exam.curriculum)),
                 `- Solve the question yourself to produce the correct answer and concise solution steps in ${getPack(exam.curriculum).language === "sv" ? "Swedish" : "English"}.`,
+                "- Write a bedömningsanvisning as moments, one per point (or one per group of points for the same criterion):",
+                '  * Read the printed points per level, e.g. "(2/1/0)" = 2 E points, 1 C point, 0 A points. The moments\' points per level MUST add up to it. If nothing is printed, estimate.',
+                "  * Each moment states what the student must show, in the style of Skolverket's bedömningsanvisningar: E moments reward a godtagbar ansats or simple method; C moments a complete, correct solution or a well-founded reasoning; A moments a general, well-structured and precise solution or reasoning. Refer to concrete values from your solution.",
+                "  * Higher-level moments typically build on the lower ones (\"Med i övrigt godtagbar lösning med korrekt svar …\").",
+                "  * Give each moment the ONE ability/criterion it assesses, using EXACTLY these codes:",
+                abilityPromptBlock(getPack(exam.curriculum)),
+                `  * Write the moments in ${getPack(exam.curriculum).language === "sv" ? "Swedish" : "English"}.`,
               ].join("\n"),
             },
             ...pageImageUrls.map((url) => ({
@@ -180,11 +182,9 @@ export async function extractQuestionsFromExam(
       number: q.number,
       questionText: q.questionText,
       topic: q.topic,
-      difficulty: q.difficulty,
-      maxPoints: q.maxPoints,
       correctAnswer: q.correctAnswer,
       solutionSteps: q.solutionSteps ?? "",
-      lgr22Abilities: q.lgr22Abilities,
+      rubric: q.rubric.map((item, i) => ({ ...item, id: `m${i + 1}` })),
     }));
     // Append (not replace): drafts from an earlier run stay until handled.
     const [updated] = await db
@@ -196,7 +196,7 @@ export async function extractQuestionsFromExam(
       .returning({ questionDrafts: exams.questionDrafts });
 
     revalidatePath(`/exams/${examId}/questions`);
-    return { success: true, drafts: updated.questionDrafts };
+    return { success: true, drafts: updated.questionDrafts.map(normalizeDraft) };
   } catch (err) {
     const message = err instanceof Error ? err.message : "AI-extraktionen misslyckades.";
     return { success: false, error: message };
@@ -258,11 +258,7 @@ export async function saveQuestionDrafts(
   if (valid.length > 0) {
     await db.transaction(async (tx) => {
       await tx.insert(questions).values(
-        valid.map(({ fields }) => ({
-          examId: exam.id,
-          ...fields,
-          solutionSteps: fields.solutionSteps || null,
-        })),
+        valid.map(({ fields }) => ({ examId: exam.id, ...questionColumns(fields) })),
       );
       await tx
         .update(exams)
