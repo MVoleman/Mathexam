@@ -9,6 +9,7 @@ import { exams, students, studentSubmissions, type StudentSubmission } from "@/d
 import { pdfToPngBuffers } from "@/lib/pdf/rasterize";
 import { SUBMISSIONS_BUCKET, uploadStorageObject } from "@/lib/storage";
 import { assertSubmissionInSchool, requireTeacher, TenancyError } from "@/lib/auth";
+import { resolveStudentByName } from "@/lib/students";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB per file
 const MAX_TOTAL_PAGES = 30;
@@ -38,20 +39,6 @@ export async function uploadSubmission(formData: FormData): Promise<UploadSubmis
         studentRef: formData.get("studentRef") ?? undefined,
       });
     if (!meta.success) return { success: false, error: meta.error.issues[0].message };
-
-    // Optional roster link — must belong to the teacher's school.
-    let studentRef: string | null = null;
-    if (meta.data.studentRef) {
-      const rosterStudent = await db.query.students.findFirst({
-        where: and(
-          eq(students.id, meta.data.studentRef),
-          eq(students.schoolId, teacher.schoolId),
-        ),
-        columns: { id: true },
-      });
-      if (!rosterStudent) return { success: false, error: "Eleven hittades inte i elevlistan." };
-      studentRef = rosterStudent.id;
-    }
 
     const exam = await db.query.exams.findFirst({
       where: and(eq(exams.id, meta.data.examId), eq(exams.schoolId, teacher.schoolId)),
@@ -107,6 +94,26 @@ export async function uploadSubmission(formData: FormData): Promise<UploadSubmis
         }),
       ),
     );
+
+    // Every submission is linked to a roster student so progression can
+    // follow the student across exams: the chosen roster entry, else the
+    // student with this name, else a new manual roster entry.
+    let studentRef: string;
+    if (meta.data.studentRef) {
+      const rosterStudent = await db.query.students.findFirst({
+        where: and(
+          eq(students.id, meta.data.studentRef),
+          eq(students.schoolId, teacher.schoolId),
+        ),
+        columns: { id: true },
+      });
+      if (!rosterStudent) return { success: false, error: "Eleven hittades inte i elevlistan." };
+      studentRef = rosterStudent.id;
+    } else {
+      const resolved = await resolveStudentByName(teacher.schoolId, meta.data.studentId);
+      if (!resolved.ok) return { success: false, error: resolved.error };
+      studentRef = resolved.studentId;
+    }
 
     // 3. Persist the submission.
     const [submission] = await db

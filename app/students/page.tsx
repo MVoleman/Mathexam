@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { asc, eq } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,7 +114,11 @@ export default async function StudentsPage() {
                 <tbody>
                   {roster.map((s) => (
                     <tr key={s.id} className="border-b last:border-0">
-                      <td className="py-2 pr-4">{s.fullName}</td>
+                      <td className="py-2 pr-4">
+                        <Link href={`/students/${s.id}`} className="underline-offset-2 hover:underline">
+                          {s.fullName}
+                        </Link>
+                      </td>
                       <td className="py-2 pr-4">{s.className ?? "–"}</td>
                       <td className="py-2 pr-4 text-muted-foreground">{s.email ?? "–"}</td>
                       <td className="py-2 pr-4">

@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { exams, gradingResults, questions } from "@/db/schema";
 import { getPack } from "@/lib/curriculum/packs";
 import { rubricOf, scoreRubric } from "@/lib/rubric";
+import { recordAbilityEvidence } from "@/lib/grading/evidence";
 import type { AbilityAssessment } from "@/lib/validations/ai-schemas";
 import { capturePrecedentFromOverride } from "@/lib/rag/learn";
 import { assertResultInSchool, requireTeacher, TenancyError } from "@/lib/auth";
@@ -170,6 +171,11 @@ export async function overrideResult(rawInput: OverrideInput): Promise<ReviewAct
       updatedAt: sql`now()`,
     })
     .where(eq(gradingResults.id, input.resultId));
+
+  // Progression follows the teacher's verdicts, not the AI's.
+  if (input.rubric) {
+    await recordAbilityEvidence(input.resultId, question, evaluation.rubricAssessment);
+  }
 
   // Learning flywheel: the override becomes an embedded grading precedent so
   // future similar answers are scored the way this teacher scores them.

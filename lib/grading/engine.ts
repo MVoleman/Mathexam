@@ -30,6 +30,7 @@ import {
 } from "@/lib/rubric";
 import { SUBMISSIONS_BUCKET, resolveStorageUrls } from "@/lib/storage";
 import { mapWithConcurrency } from "@/lib/utils/concurrency";
+import { recordAbilityEvidence } from "@/lib/grading/evidence";
 import {
   TranscriptionResultSchema,
   SubmissionTranscriptionSchema,
@@ -376,6 +377,7 @@ export async function gradeAnswer(input: {
     })
     .returning();
 
+  await recordAbilityEvidence(result.id, context.question, persisted.rubricAssessment);
   return result;
 }
 

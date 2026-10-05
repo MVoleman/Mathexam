@@ -320,6 +320,43 @@ export const gradingResults = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// ability_evidence — one row per moment of a graded answer
+// ---------------------------------------------------------------------------
+
+/**
+ * Snapshot of each moment's outcome when an answer is graded or corrected:
+ * the basis of a student's ability progression across exams. Snapshotting
+ * keeps history stable when a bedömningsanvisning is edited later; the
+ * student comes from the submission (student_ref), so relinking a
+ * submission needs no rewrite here.
+ */
+export const abilityEvidence = pgTable(
+  "ability_evidence",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    resultId: uuid("result_id")
+      .notNull()
+      .references(() => gradingResults.id, { onDelete: "cascade" }),
+    itemId: text("item_id").notNull(),
+    ability: text("ability").notNull(),
+    level: difficultyEnum("level").notNull(),
+    points: integer("points").notNull(),
+    met: boolean("met").notNull(),
+    /** The moment's text at grading time, for drill-down. */
+    description: text("description").notNull(),
+    /** The grader's (or teacher's) evidence quote. */
+    evidence: text("evidence").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ability_evidence_result_item_uq").on(table.resultId, table.itemId),
+    index("ability_evidence_ability_idx").on(table.ability),
+  ],
+);
+
+export type AbilityEvidence = typeof abilityEvidence.$inferSelect;
+
+// ---------------------------------------------------------------------------
 // grading_jobs (batch pipeline tracking)
 // ---------------------------------------------------------------------------
 
@@ -610,7 +647,15 @@ export const studentSubmissionsRelations = relations(studentSubmissions, ({ one,
   shareCodes: many(shareCodes),
 }));
 
-export const gradingResultsRelations = relations(gradingResults, ({ one }) => ({
+export const abilityEvidenceRelations = relations(abilityEvidence, ({ one }) => ({
+  result: one(gradingResults, {
+    fields: [abilityEvidence.resultId],
+    references: [gradingResults.id],
+  }),
+}));
+
+export const gradingResultsRelations = relations(gradingResults, ({ one, many }) => ({
+  evidence: many(abilityEvidence),
   submission: one(studentSubmissions, {
     fields: [gradingResults.submissionId],
     references: [studentSubmissions.id],
