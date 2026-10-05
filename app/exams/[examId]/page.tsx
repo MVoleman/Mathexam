@@ -14,6 +14,7 @@ import {
   summarizeRubric,
 } from "@/lib/rubric";
 import { getExamDetail } from "@/lib/queries";
+import { pendingGradingItems } from "@/lib/grading/batch";
 import { requireTeacher } from "@/lib/auth";
 import { EXAMS_BUCKET, resolveStorageUrl } from "@/lib/storage";
 
@@ -29,6 +30,10 @@ export default async function ExamDetailPage({
   if (!detail) notFound();
 
   const { exam, questions, submissions, latestJob } = detail;
+  const pendingCount = Object.values(await pendingGradingItems(exam.id)).reduce(
+    (sum, n) => sum + n,
+    0,
+  );
   const maxTotal = questions.reduce((s, q) => s + q.maxPoints, 0);
   const levelPointsOf = (q: (typeof questions)[number]) =>
     summarizeRubric(rubricOf(q)).levelPoints;
@@ -78,6 +83,7 @@ export default async function ExamDetailPage({
         initialJob={latestJob}
         submissionCount={submissions.length}
         questionCount={questions.length}
+        pendingCount={pendingCount}
       />
 
       <GradingLimitsForm

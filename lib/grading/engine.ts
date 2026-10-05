@@ -398,6 +398,11 @@ const blankTranscription = (): TranscriptionResult => ({
 export async function gradeSubmission(
   submissionId: string,
   onItem?: (ok: boolean, error?: string) => void | Promise<void>,
+  /**
+   * Batch mode: only evaluate questions this submission has no result for,
+   * so earlier gradings (and teacher reviews of them) are never overwritten.
+   */
+  { onlyUngraded = false }: { onlyUngraded?: boolean } = {},
 ): Promise<void> {
   const submission = await db.query.studentSubmissions.findFirst({
     where: eq(studentSubmissions.id, submissionId),
@@ -412,15 +417,27 @@ export async function gradeSubmission(
   });
   if (examQuestions.length === 0) throw new Error("Provet saknar frågor.");
 
+  let toGrade = examQuestions;
+  if (onlyUngraded) {
+    const graded = await db
+      .select({ questionId: gradingResults.questionId })
+      .from(gradingResults)
+      .where(eq(gradingResults.submissionId, submissionId));
+    const gradedIds = new Set(graded.map((g) => g.questionId));
+    toGrade = examQuestions.filter((q) => !gradedIds.has(q.id));
+    if (toGrade.length === 0) return; // nothing new: skip the model calls
+  }
+
   // Buckets are private — mint signed URLs the model can fetch.
   const imageUrls = await resolveStorageUrls(SUBMISSIONS_BUCKET, submission.imageUrls);
 
-  // 1. Single segmentation + transcription pass over all pages.
+  // 1. Single segmentation + transcription pass over all pages. Every
+  // question is listed (not just toGrade) so answers map to the right number.
   const answers = await transcribeSubmission(imageUrls, examQuestions);
   const byNumber = new Map(answers.map((a) => [normalizeNumber(a.questionNumber), a]));
 
   // 2. Evaluate per question, in parallel (text-only — cheap and fast).
-  await mapWithConcurrency(examQuestions, EVALUATION_CONCURRENCY, async (question) => {
+  await mapWithConcurrency(toGrade, EVALUATION_CONCURRENCY, async (question) => {
     try {
       const transcription =
         byNumber.get(normalizeNumber(question.number)) ?? blankTranscription();

@@ -38,7 +38,7 @@ export const gradeBatchJob = inngest.createFunction(
     await Promise.all(
       loaded.submissionIds.map((submissionId) =>
         step.run(`grade-submission-${submissionId}`, () =>
-          gradeSubmissionForJob(jobId, submissionId, loaded.questionCount),
+          gradeSubmissionForJob(jobId, submissionId, loaded.pending[submissionId]),
         ),
       ),
     );

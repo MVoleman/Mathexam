@@ -14,10 +14,28 @@ const SUBMISSION_CONCURRENCY = 2;
 // submission) and the in-process fallback loop.
 // ---------------------------------------------------------------------------
 
+/**
+ * Answers (submission × question) of an exam that have no grading result:
+ * new submissions, questions added later and earlier failures. Already
+ * graded answers are never re-graded by a batch.
+ */
+export async function pendingGradingItems(examId: string): Promise<Record<string, number>> {
+  const rows = await db.execute<{ submissionId: string; pending: number }>(sql`
+    SELECT ss.id AS "submissionId", count(*)::int AS pending
+    FROM student_submissions ss
+    JOIN questions q ON q.exam_id = ss.exam_id
+    LEFT JOIN grading_results gr ON gr.submission_id = ss.id AND gr.question_id = q.id
+    WHERE ss.exam_id = ${examId} AND gr.id IS NULL
+    GROUP BY ss.id
+  `);
+  return Object.fromEntries(rows.map((r) => [r.submissionId, Number(r.pending)]));
+}
+
 export async function markJobRunning(jobId: string): Promise<{
   examId: string;
   submissionIds: string[];
-  questionCount: number;
+  /** Ungraded answers per submission (JSON-safe for Inngest steps). */
+  pending: Record<string, number>;
 } | null> {
   const job = await db.query.gradingJobs.findFirst({
     where: eq(gradingJobs.id, jobId),
@@ -29,33 +47,19 @@ export async function markJobRunning(jobId: string): Promise<{
     .set({ status: "running", startedAt: new Date() })
     .where(eq(gradingJobs.id, jobId));
 
-  const [examQuestions, submissions] = await Promise.all([
-    db.query.questions.findMany({
-      where: eq(questions.examId, job.examId),
-      columns: { id: true },
-    }),
-    db.query.studentSubmissions.findMany({
-      where: eq(studentSubmissions.examId, job.examId),
-      columns: { id: true },
-    }),
-  ]);
-
-  return {
-    examId: job.examId,
-    submissionIds: submissions.map((s) => s.id),
-    questionCount: examQuestions.length,
-  };
+  const pending = await pendingGradingItems(job.examId);
+  return { examId: job.examId, submissionIds: Object.keys(pending), pending };
 }
 
 /**
- * Grades one submission inside a batch job, updating the job's counters.
- * Idempotent enough for retries: gradeAnswer upserts per (submission,
- * question), so a retried submission overwrites rather than duplicates.
+ * Grades one submission's ungraded answers inside a batch job, updating the
+ * job's counters. Safe to retry: answers graded by an earlier attempt are
+ * skipped.
  */
 export async function gradeSubmissionForJob(
   jobId: string,
   submissionId: string,
-  questionCount: number,
+  pendingCount: number,
 ): Promise<void> {
   const markItem = async (ok: boolean, error?: string) => {
     await db
@@ -72,14 +76,14 @@ export async function gradeSubmissionForJob(
   };
 
   try {
-    await gradeSubmission(submissionId, markItem);
+    await gradeSubmission(submissionId, markItem, { onlyUngraded: true });
   } catch (err) {
-    // Whole-submission failure: count all of its questions as failed.
+    // Whole-submission failure: count all of its pending answers as failed.
     const message = err instanceof Error ? err.message : String(err);
     await db
       .update(gradingJobs)
       .set({
-        failedItems: sql`${gradingJobs.failedItems} + ${questionCount}`,
+        failedItems: sql`${gradingJobs.failedItems} + ${pendingCount}`,
         lastError: message,
       })
       .where(eq(gradingJobs.id, jobId));
@@ -138,7 +142,7 @@ export async function processGradingJob(jobId: string): Promise<void> {
   await mapWithConcurrency(
     loaded.submissionIds,
     SUBMISSION_CONCURRENCY,
-    (submissionId) => gradeSubmissionForJob(jobId, submissionId, loaded.questionCount),
+    (submissionId) => gradeSubmissionForJob(jobId, submissionId, loaded.pending[submissionId]),
   );
 
   await finalizeGradingJob(jobId, loaded.examId);

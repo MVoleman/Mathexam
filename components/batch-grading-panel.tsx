@@ -16,6 +16,8 @@ type Props = {
   initialJob: GradingJob | null;
   submissionCount: number;
   questionCount: number;
+  /** Answers without a grading result — what "Starta rättning" will grade. */
+  pendingCount: number;
 };
 
 export function BatchGradingPanel({
@@ -23,6 +25,7 @@ export function BatchGradingPanel({
   initialJob,
   submissionCount,
   questionCount,
+  pendingCount,
 }: Props) {
   const router = useRouter();
   const [job, setJob] = useState<GradingJob | null>(initialJob);
@@ -74,7 +77,7 @@ export function BatchGradingPanel({
         <CardTitle className="text-base">Batchrättning</CardTitle>
         <Button
           onClick={handleStart}
-          disabled={isStarting || isActive || submissionCount === 0 || questionCount === 0}
+          disabled={isStarting || isActive || pendingCount === 0}
           size="sm"
         >
           {isStarting || isActive ? (
@@ -87,8 +90,9 @@ export function BatchGradingPanel({
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          {submissionCount} inlämningar × {questionCount} frågor ={" "}
-          {submissionCount * questionCount} svar att rätta.
+          {pendingCount === 0
+            ? `Alla ${submissionCount * questionCount} svar är rättade. Nya inlämningar rättas när du startar igen.`
+            : `${pendingCount} av ${submissionCount * questionCount} svar är inte rättade än. Redan rättade svar och dina granskningar lämnas orörda.`}
         </p>
 
         {job && (

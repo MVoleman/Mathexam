@@ -12,6 +12,7 @@ import {
   transcribeSingleAnswer,
 } from "@/lib/grading/engine";
 import { assertSubmissionInSchool, requireTeacher } from "@/lib/auth";
+import { audit } from "@/lib/audit";
 import { SUBMISSIONS_BUCKET, resolveStorageUrls } from "@/lib/storage";
 
 // ---------------------------------------------------------------------------
@@ -60,10 +61,22 @@ export async function gradeSubmissionAction(
   const parsed = z.string().uuid().safeParse(submissionId);
   if (!parsed.success) return { success: false, error: "Ogiltigt inlämnings-id." };
 
+  // Deliberate full re-grade: overwrites every answer, including reviews.
+  const failures: string[] = [];
   try {
     const teacher = await requireTeacher();
     await assertSubmissionInSchool(parsed.data, teacher.schoolId);
-    await gradeSubmission(parsed.data);
+    await gradeSubmission(parsed.data, (ok, error) => {
+      if (!ok) failures.push(error ?? "Okänt fel.");
+    });
+    await audit({
+      schoolId: teacher.schoolId,
+      actorId: teacher.id,
+      action: "submission.regrade",
+      entityType: "submission",
+      entityId: parsed.data,
+      metadata: { failed: failures.length },
+    });
   } catch (err) {
     return {
       success: false,
@@ -77,5 +90,11 @@ export async function gradeSubmissionAction(
   });
   if (submission) revalidatePath(`/exams/${submission.examId}`);
   revalidatePath(`/review/${parsed.data}`);
+  if (failures.length > 0) {
+    return {
+      success: false,
+      error: `${failures.length} svar kunde inte rättas om (${failures[0]}). Övriga är omrättade.`,
+    };
+  }
   return { success: true };
 }

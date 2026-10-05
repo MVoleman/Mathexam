@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReviewPanel } from "@/components/review-panel";
+import { RegradeButton } from "@/components/regrade-button";
 import { getCapturableGoldenSets, getSubmissionForReview } from "@/lib/queries";
 import { requireTeacher } from "@/lib/auth";
 import { SUBMISSIONS_BUCKET, resolveStorageUrls } from "@/lib/storage";
@@ -39,12 +40,13 @@ export default async function ReviewPage({
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold tracking-tight">
             Granskning — {submission.studentId}
           </h1>
           <p className="text-sm text-muted-foreground">{submission.exam.title}</p>
         </div>
+        <RegradeButton submissionId={submission.id} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(320px,2fr)_3fr]">

@@ -10,13 +10,13 @@ import {
   studentSubmissions,
   type GradingJob,
 } from "@/db/schema";
-import { failGradingJob, processGradingJob } from "@/lib/grading/batch";
+import { failGradingJob, pendingGradingItems, processGradingJob } from "@/lib/grading/batch";
 import { inngest, queueEnabled } from "@/lib/queue/inngest";
 import { requireTeacher } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 
 // ---------------------------------------------------------------------------
-// Start a batch job for a whole exam (all submissions × all questions)
+// Start a batch job for an exam's ungraded answers (submissions × questions)
 // ---------------------------------------------------------------------------
 
 export async function startBatchGrading(
@@ -36,13 +36,16 @@ export async function startBatchGrading(
   if (examQuestions.length === 0) return { error: "Provet saknar frågor." };
   if (submissions.length === 0) return { error: "Inga inlämningar att rätta." };
 
+  // Only answers without a result: earlier gradings and reviews are kept.
+  const pending = await pendingGradingItems(examId);
+  const totalItems = Object.values(pending).reduce((sum, n) => sum + n, 0);
+  if (totalItems === 0) {
+    return { error: "Alla inlämningar är redan rättade." };
+  }
+
   const [job] = await db
     .insert(gradingJobs)
-    .values({
-      examId,
-      status: "queued",
-      totalItems: examQuestions.length * submissions.length,
-    })
+    .values({ examId, status: "queued", totalItems })
     .returning();
 
   await db.update(exams).set({ status: "grading" }).where(eq(exams.id, examId));
@@ -62,7 +65,7 @@ export async function startBatchGrading(
     action: "grading.batch_start",
     entityType: "exam",
     entityId: examId,
-    metadata: { submissions: submissions.length, questions: examQuestions.length },
+    metadata: { submissions: Object.keys(pending).length, answers: totalItems },
   });
 
   revalidatePath(`/exams/${examId}`);
