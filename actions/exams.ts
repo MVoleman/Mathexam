@@ -46,3 +46,23 @@ export async function setGradingLimits(
   revalidatePath(`/exams/${examId}/analytics`);
   return { success: true };
 }
+
+/** Whether students see the preliminary grade in the portal and PDF. */
+export async function setShowGradeToStudents(
+  examId: string,
+  show: boolean,
+): Promise<{ success: true } | { success: false; error: string }> {
+  const id = z.string().uuid().safeParse(examId);
+  if (!id.success) return { success: false, error: "Ogiltigt prov-id." };
+
+  const teacher = await requireTeacher();
+  const updated = await db
+    .update(exams)
+    .set({ showGradeToStudents: show })
+    .where(and(eq(exams.id, id.data), eq(exams.schoolId, teacher.schoolId)))
+    .returning({ id: exams.id });
+  if (updated.length === 0) return { success: false, error: "Provet hittades inte." };
+
+  revalidatePath(`/exams/${examId}`);
+  return { success: true };
+}

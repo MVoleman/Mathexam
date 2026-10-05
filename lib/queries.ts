@@ -18,6 +18,8 @@ import {
   answerLevelPoints,
   emptyLevelPoints,
   gradeFor,
+  GRADES,
+  type Grade,
   type LevelPoints,
 } from "@/lib/rubric";
 
@@ -259,17 +261,17 @@ export async function getExamAnalytics(examId: string, schoolId: string) {
   };
 }
 
-export type GradeBucket = { grade: "F" | "E" | "C" | "A"; students: number };
+export type GradeBucket = { grade: Grade; students: number };
 
 function computeGradeDistribution(
   students: { total: number; levelPoints: LevelPoints }[],
   limits: Exam["gradingLimits"],
 ): GradeBucket[] {
-  const buckets: Record<GradeBucket["grade"], number> = { F: 0, E: 0, C: 0, A: 0 };
+  const buckets = Object.fromEntries(GRADES.map((g) => [g, 0])) as Record<Grade, number>;
   for (const { total, levelPoints } of students) {
     buckets[limits ? gradeFor(total, levelPoints, limits) : "F"] += 1;
   }
-  return (Object.entries(buckets) as [GradeBucket["grade"], number][]).map(
+  return (Object.entries(buckets) as [Grade, number][]).map(
     ([grade, students]) => ({ grade, students }),
   );
 }
@@ -321,6 +323,11 @@ export async function getStudentReport(
   submissionId: string,
   /** Pass null only from the share-code portal, which authorizes by code. */
   schoolId: string | null,
+  /**
+   * Student-facing output (portal, PDF): the grade is included only when
+   * the exam's showGradeToStudents is on. Teachers always get it.
+   */
+  { forStudent = false }: { forStudent?: boolean } = {},
 ) {
   const submission = await db.query.studentSubmissions.findFirst({
     where: and(
@@ -346,7 +353,9 @@ export async function getStudentReport(
     emptyLevelPoints(),
   );
   const limits = submission.exam.gradingLimits;
-  const grade = limits ? gradeFor(totalPoints, levelPoints, limits) : null;
+  const computedGrade = limits ? gradeFor(totalPoints, levelPoints, limits) : null;
+  const gradeHidden = forStudent && !submission.exam.showGradeToStudents;
+  const grade = gradeHidden ? null : computedGrade;
 
   return {
     submission,
@@ -354,6 +363,8 @@ export async function getStudentReport(
     maxPoints,
     levelPoints,
     grade,
+    /** True when a grade exists but this student-facing view must not show it. */
+    gradeHidden: gradeHidden && computedGrade !== null,
     abilities: [...abilityMap.entries()].map(([ability, v]) => ({
       ability,
       rate: v.available === 0 ? 0 : Math.round((v.earned / v.available) * 100),

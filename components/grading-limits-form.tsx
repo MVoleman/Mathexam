@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { setGradingLimits } from "@/actions/exams";
+import { setGradingLimits, setShowGradeToStudents } from "@/actions/exams";
 import type { GradingLimits } from "@/db/schema";
 import { formatLevelPoints, type LevelPoints } from "@/lib/rubric";
 
@@ -20,11 +20,13 @@ export function GradingLimitsForm({
   examId,
   limits,
   examLevelPoints,
+  showGradeToStudents,
 }: {
   examId: string;
   limits: GradingLimits | null;
   /** The exam's available points per level, for orientation. */
   examLevelPoints: LevelPoints;
+  showGradeToStudents: boolean;
 }) {
   const router = useRouter();
   const [values, setValues] = useState<Record<Field, string>>({
@@ -36,6 +38,19 @@ export function GradingLimitsForm({
   });
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [showGrade, setShowGrade] = useState(showGradeToStudents);
+
+  function toggleShowGrade(show: boolean) {
+    setShowGrade(show);
+    setMessage(null);
+    startTransition(async () => {
+      const res = await setShowGradeToStudents(examId, show);
+      if (!res.success) {
+        setShowGrade(!show);
+        setMessage({ ok: false, text: res.error });
+      } else router.refresh();
+    });
+  }
 
   const input = (field: Field, label: string) => (
     <Input
@@ -80,7 +95,8 @@ export function GradingLimitsForm({
       <CardContent className="space-y-3 text-sm">
         <p className="text-muted-foreground">
           Provet ger {formatLevelPoints(examLevelPoints)} poäng på E/C/A-nivå. Nivåkraven är
-          valfria.
+          valfria. Når eleven C-gränsen men inte C-nivåkravet blir betyget D; når eleven
+          A-gränsen men inte A-nivåkravet blir det B.
         </p>
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -95,6 +111,21 @@ export function GradingLimitsForm({
             minst {input("aLevelMin", "A-krav: poäng på A-nivå")} p på A-nivå
           </div>
         </div>
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={showGrade}
+            onChange={(e) => toggleShowGrade(e.target.checked)}
+            disabled={isPending}
+            className="mt-0.5"
+          />
+          <span>
+            Visa preliminärt betyg för eleven
+            <span className="block text-xs text-muted-foreground">
+              Gäller elevportalen och PDF-rapporten. Du ser alltid betyget.
+            </span>
+          </span>
+        </label>
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={() => save()} disabled={isPending}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -178,6 +178,8 @@ export const exams = pgTable("exams", {
    */
   pageImageUrls: text("page_image_urls").array().notNull().default([]),
   gradingLimits: jsonb("grading_limits").$type<GradingLimits>(),
+  /** Show the preliminary grade in the student portal and PDF (teachers always see it). */
+  showGradeToStudents: boolean("show_grade_to_students").notNull().default(false),
   /**
    * AI-extracted questions awaiting teacher review. Persisted so a reload or
    * navigation never forces a second (paid) extraction; each draft leaves

@@ -186,16 +186,21 @@ export type GradingLimitsLike = {
   aLevelMin?: number;
 };
 
-export function gradeFor(
-  total: number,
-  levelPoints: LevelPoints,
-  limits: GradingLimitsLike,
-): "F" | "E" | "C" | "A" {
-  const cOrA = levelPoints.C + levelPoints.A;
-  if (total >= limits.A && levelPoints.A >= (limits.aLevelMin ?? 0) && cOrA >= (limits.cLevelMin ?? 0)) {
-    return "A";
-  }
-  if (total >= limits.C && cOrA >= (limits.cLevelMin ?? 0)) return "C";
+export type Grade = "F" | "E" | "D" | "C" | "B" | "A";
+/** Grades from lowest to highest. */
+export const GRADES: Grade[] = ["F", "E", "D", "C", "B", "A"];
+
+/**
+ * Preliminary grade on the A–F scale. Reaching a total but not its level
+ * requirement gives the intermediate grade below it: C's total without
+ * enough C/A-level points is D, A's total without enough A-level points
+ * is B.
+ */
+export function gradeFor(total: number, levelPoints: LevelPoints, limits: GradingLimitsLike): Grade {
+  const cLevelOk = levelPoints.C + levelPoints.A >= (limits.cLevelMin ?? 0);
+  const aLevelOk = levelPoints.A >= (limits.aLevelMin ?? 0);
+  if (total >= limits.A && cLevelOk) return aLevelOk ? "A" : "B";
+  if (total >= limits.C) return cLevelOk ? "C" : "D";
   if (total >= limits.E) return "E";
   return "F";
 }

@@ -13,10 +13,12 @@ export async function GET(
   { params }: { params: { examId: string; submissionId: string } },
 ) {
   const teacher = await requireTeacher();
+  // The PDF is handed to the student, so it follows the exam's grade setting.
   const report = await getStudentReport(
     params.examId,
     params.submissionId,
     teacher.schoolId,
+    { forStudent: true },
   );
   if (!report) return new NextResponse("Not found", { status: 404 });
 

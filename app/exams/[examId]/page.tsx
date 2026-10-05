@@ -90,6 +90,7 @@ export default async function ExamDetailPage({
         examId={exam.id}
         limits={exam.gradingLimits}
         examLevelPoints={examLevelPoints}
+        showGradeToStudents={exam.showGradeToStudents}
       />
 
       <div className="grid gap-6 lg:grid-cols-2">

@@ -34,7 +34,7 @@ export default async function PortalStudentReportPage({
   });
   if (!submission) notFound();
 
-  const report = await getStudentReport(submission.examId, submission.id, null);
+  const report = await getStudentReport(submission.examId, submission.id, null, { forStudent: true });
   if (!report) notFound();
 
   const student = await db.query.students.findFirst({

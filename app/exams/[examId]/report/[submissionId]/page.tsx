@@ -82,6 +82,9 @@ export default async function StudentReportPage({
             <div className="text-center">
               <p className="text-sm text-muted-foreground">Preliminärt betyg</p>
               <p className="text-3xl font-semibold">{grade}</p>
+              {!submission.exam.showGradeToStudents && (
+                <p className="text-xs text-muted-foreground">Visas inte för eleven</p>
+              )}
             </div>
           )}
           <div className="min-w-52 flex-1 space-y-2">

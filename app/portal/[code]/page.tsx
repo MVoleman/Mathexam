@@ -34,7 +34,7 @@ export default async function PortalPage({ params }: { params: { code: string } 
     });
     if (!submission) notFound();
 
-    const report = await getStudentReport(submission.examId, submission.id, null);
+    const report = await getStudentReport(submission.examId, submission.id, null, { forStudent: true });
     if (!report) notFound();
 
     auditInBackground({
